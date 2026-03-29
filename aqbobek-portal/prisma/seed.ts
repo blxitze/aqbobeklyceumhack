@@ -1,7 +1,7 @@
 import "dotenv/config";
-import { createHash } from "crypto";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient, PortfolioItemType, Role } from "@prisma/client";
+import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL ?? "" }),
@@ -142,7 +142,7 @@ const LAST_NAMES = [
 ];
 
 function hashPassword(raw: string): string {
-  return createHash("sha256").update(raw).digest("hex");
+  return bcrypt.hashSync(raw, 10);
 }
 
 function randomInt(min: number, max: number): number {
@@ -248,7 +248,10 @@ async function main() {
 
       const studentUser = await prisma.user.create({
         data: {
-          email: `student${String(studentCounter + 1).padStart(3, "0")}@aqbobek.kz`,
+          email:
+            studentCounter === 0
+              ? "student@aqbobek.kz"
+              : `student${String(studentCounter + 1).padStart(3, "0")}@aqbobek.kz`,
           password: hashPassword("student123"),
           name: fullName,
           role: Role.STUDENT,
