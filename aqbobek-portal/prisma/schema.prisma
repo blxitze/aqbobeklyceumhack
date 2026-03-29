@@ -1,0 +1,154 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  STUDENT
+  TEACHER
+  PARENT
+  ADMIN
+}
+
+enum PortfolioItemType {
+  CERTIFICATE
+  ACHIEVEMENT
+  OLYMPIAD
+  OTHER
+}
+
+model User {
+  id             String          @id @default(cuid())
+  email          String          @unique
+  password       String
+  name           String
+  role           Role
+  studentProfile StudentProfile?
+  teacherProfile TeacherProfile?
+  parentProfile  ParentProfile?
+  announcements  Announcement[]
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+}
+
+model StudentProfile {
+  id             String          @id @default(cuid())
+  userId         String          @unique
+  classId        String
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  class          Class           @relation(fields: [classId], references: [id], onDelete: Restrict)
+  grades         Grade[]
+  portfolioItems PortfolioItem[]
+  parents        ParentProfile[]
+}
+
+model TeacherProfile {
+  id                      String         @id @default(cuid())
+  userId                  String         @unique
+  subjects                String[]
+  user                    User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scheduleSlots           ScheduleSlot[]
+  originalSubstitutions   Substitution[] @relation("OriginalTeacherSubstitutions")
+  substituteSubstitutions Substitution[] @relation("SubstituteTeacherSubstitutions")
+}
+
+model ParentProfile {
+  id      String         @id @default(cuid())
+  userId  String         @unique
+  childId String
+  user    User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  child   StudentProfile @relation(fields: [childId], references: [id], onDelete: Cascade)
+}
+
+model Class {
+  id            String         @id @default(cuid())
+  name          String         @unique
+  grade         Int
+  students      StudentProfile[]
+  scheduleSlots ScheduleSlot[]
+  notifications Notification[]
+}
+
+model Grade {
+  id         String         @id @default(cuid())
+  studentId  String
+  subject    String
+  topic      String
+  score      Float
+  date       DateTime
+  attendance Boolean
+  student    StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  createdAt  DateTime       @default(now())
+}
+
+model Topic {
+  id            String   @id @default(cuid())
+  subject       String
+  name          String
+  prerequisites String[]
+}
+
+model ScheduleSlot {
+  id            String         @id @default(cuid())
+  classId       String
+  teacherId     String
+  subject       String
+  room          String
+  dayOfWeek     Int
+  timeSlot      Int
+  isActive      Boolean        @default(true)
+  class         Class          @relation(fields: [classId], references: [id], onDelete: Cascade)
+  teacher       TeacherProfile @relation(fields: [teacherId], references: [id], onDelete: Restrict)
+  substitutions Substitution[]
+  createdAt     DateTime       @default(now())
+
+  @@index([dayOfWeek, timeSlot])
+}
+
+model Substitution {
+  id                String         @id @default(cuid())
+  originalTeacherId String
+  substituteTeacherId String?
+  date              DateTime
+  reason            String
+  slots             ScheduleSlot[]
+  originalTeacher   TeacherProfile @relation("OriginalTeacherSubstitutions", fields: [originalTeacherId], references: [id], onDelete: Restrict)
+  substituteTeacher TeacherProfile? @relation("SubstituteTeacherSubstitutions", fields: [substituteTeacherId], references: [id], onDelete: SetNull)
+  createdAt         DateTime       @default(now())
+}
+
+model PortfolioItem {
+  id          String            @id @default(cuid())
+  studentId   String
+  title       String
+  description String
+  fileUrl     String?
+  type        PortfolioItemType
+  date        DateTime
+  student     StudentProfile    @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  createdAt   DateTime          @default(now())
+}
+
+model Notification {
+  id            String   @id @default(cuid())
+  title         String
+  body          String
+  targetRole    Role?
+  targetClassId String?
+  targetClass   Class?   @relation(fields: [targetClassId], references: [id], onDelete: SetNull)
+  readBy        String[]
+  createdAt     DateTime @default(now())
+}
+
+model Announcement {
+  id          String   @id @default(cuid())
+  title       String
+  body        String
+  targetGrade Int?
+  authorId    String
+  author      User     @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  createdAt   DateTime @default(now())
+}
