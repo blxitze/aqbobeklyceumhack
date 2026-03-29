@@ -10,14 +10,13 @@ import { signOut } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-type TeacherLayoutProps = {
+type ParentLayoutProps = {
   children: ReactNode;
-  teacherName: string;
-  subjects: string[];
-  firstClassId: string | null;
+  parentName: string;
+  childName: string;
 };
 
-function initials(name: string): string {
+function getInitials(name: string): string {
   return name
     .trim()
     .split(/\s+/)
@@ -26,21 +25,10 @@ function initials(name: string): string {
     .join("");
 }
 
-export default function TeacherLayout({
-  children,
-  teacherName,
-  subjects,
-  firstClassId,
-}: TeacherLayoutProps) {
+export default function ParentLayout({ children, parentName, childName }: ParentLayoutProps) {
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
-  const teacherInitials = useMemo(() => initials(teacherName), [teacherName]);
-  const classesHref = firstClassId ? `/teacher/class/${firstClassId}` : "/teacher/dashboard";
-  const navLinks = [
-    { href: "/teacher/dashboard", label: "Дашборд" },
-    { href: classesHref, label: "Мои классы" },
-    { href: "/teacher/reports", label: "Отчёты" },
-  ];
+  const initials = useMemo(() => getInitials(parentName), [parentName]);
 
   return (
     <div className="flex min-h-screen bg-muted/20">
@@ -60,38 +48,32 @@ export default function TeacherLayout({
         )}
       >
         <div className="border-b p-4 pt-16 md:pt-4">
-          <p className="text-lg font-semibold">Панель учителя</p>
+          <p className="text-lg font-semibold">Панель родителя</p>
         </div>
 
         <nav className="flex-1 space-y-2 overflow-y-auto py-4 px-4">
-          {navLinks.map((link) => {
-            const isActive = pathname === link.href || (link.href.includes("/teacher/class/") && pathname.startsWith("/teacher/class"));
-            return (
-              <Link
-                key={link.label}
-                href={link.href}
-                onClick={() => setIsOpen(false)}
-                className={cn(
-                  "block rounded-md px-3 py-2 text-sm transition-colors",
-                  isActive ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted",
-                )}
-              >
-                {link.label}
-              </Link>
-            );
-          })}
+          <Link
+            href="/parent/dashboard"
+            onClick={() => setIsOpen(false)}
+            className={cn(
+              "block rounded-md px-3 py-2 text-sm transition-colors",
+              pathname === "/parent/dashboard"
+                ? "bg-primary text-primary-foreground"
+                : "text-muted-foreground hover:bg-muted",
+            )}
+          >
+            Дашборд
+          </Link>
         </nav>
 
         <div className="mt-auto shrink-0 space-y-4 border-t p-4">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
-              {teacherInitials}
+              {initials}
             </div>
             <div>
-              <p className="text-sm font-semibold">{teacherName}</p>
-              <p className="max-w-44 truncate text-xs text-muted-foreground">
-                {subjects.length > 0 ? subjects.join(", ") : "Предметы не указаны"}
-              </p>
+              <p className="text-sm font-semibold">{parentName}</p>
+              <p className="text-xs text-muted-foreground">Родитель {childName}</p>
             </div>
           </div>
           <Button variant="outline" className="w-full" onClick={() => signOut({ redirectTo: "/login" })}>
@@ -103,8 +85,8 @@ export default function TeacherLayout({
       {isOpen ? (
         <button
           type="button"
-          className="fixed inset-0 z-10 bg-black/30 md:hidden"
           aria-label="Закрыть меню"
+          className="fixed inset-0 z-10 bg-black/30 md:hidden"
           onClick={() => setIsOpen(false)}
         />
       ) : null}

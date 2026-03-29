@@ -48,21 +48,29 @@ export default function GradesChart({ grades }: GradesChartProps) {
     (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
   );
   const subjects = Array.from(new Set(sortedGrades.map((grade) => grade.subject)));
-  const dataMap = new Map<string, Record<string, number | string>>();
+  const dataMap = new Map<string, Record<string, number | string | null>>();
 
   for (const grade of sortedGrades) {
-    const dateLabel = formatDate(grade.date);
-    const existing = dataMap.get(dateLabel) ?? { date: dateLabel, fullDate: grade.date };
+    const dateKey = new Date(grade.date).toISOString().slice(0, 10);
+    const existing = dataMap.get(dateKey) ?? { date: formatDate(grade.date), fullDate: grade.date };
     existing[grade.subject] = grade.score;
     existing.fullDate = grade.date;
-    dataMap.set(dateLabel, existing);
+    dataMap.set(dateKey, existing);
   }
 
-  const chartData = Array.from(dataMap.values());
+  const chartData = Array.from(dataMap.values()).map((row) => {
+    const normalized: Record<string, number | string | null> = { ...row };
+    for (const subject of subjects) {
+      if (!(subject in normalized)) {
+        normalized[subject] = null;
+      }
+    }
+    return normalized;
+  });
 
   return (
-    <ResponsiveContainer width="100%" height={300}>
-      <LineChart data={chartData} margin={{ top: 8, right: 12, left: 0, bottom: 16 }}>
+    <ResponsiveContainer width="100%" height={420}>
+      <LineChart data={chartData} margin={{ top: 10, right: 20, left: 10, bottom: 20 }}>
         <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
         <XAxis dataKey="date" tick={{ fontSize: 12 }} />
         <YAxis domain={[0, 100]} tick={{ fontSize: 12 }} />
@@ -81,8 +89,9 @@ export default function GradesChart({ grades }: GradesChartProps) {
         {subjects.map((subject) => (
           <Line
             key={subject}
-            type="monotone"
+            type="linear"
             dataKey={subject}
+            connectNulls={true}
             stroke={SUBJECT_COLORS[subject] ?? DEFAULT_COLOR}
             strokeWidth={2}
             dot={{ r: 3 }}

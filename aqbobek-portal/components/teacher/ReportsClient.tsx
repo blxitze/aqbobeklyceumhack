@@ -27,8 +27,32 @@ export default function ReportsClient({ classes }: ReportsClientProps) {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [reportData, setReportData] = useState<ReportResponse | null>(null);
   const [open, setOpen] = useState(false);
+  const [cachedReports, setCachedReports] = useState<Record<string, ReportResponse>>({});
 
   async function generateReport(classId: string) {
+    const inState = cachedReports[classId];
+    if (inState) {
+      setReportData(inState);
+      setOpen(true);
+      return;
+    }
+
+    const storageKey = `teacher-report-${classId}`;
+    if (typeof window !== "undefined") {
+      const cached = sessionStorage.getItem(storageKey);
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached) as ReportResponse;
+          setCachedReports((prev) => ({ ...prev, [classId]: parsed }));
+          setReportData(parsed);
+          setOpen(true);
+          return;
+        } catch {
+          sessionStorage.removeItem(storageKey);
+        }
+      }
+    }
+
     setLoadingClassId(classId);
     setErrorMessage(null);
 
@@ -44,6 +68,10 @@ export default function ReportsClient({ classes }: ReportsClientProps) {
         throw new Error(payload.error ?? "Не удалось сгенерировать отчёт");
       }
 
+      setCachedReports((prev) => ({ ...prev, [classId]: payload }));
+      if (typeof window !== "undefined") {
+        sessionStorage.setItem(storageKey, JSON.stringify(payload));
+      }
       setReportData(payload);
       setOpen(true);
     } catch (error) {

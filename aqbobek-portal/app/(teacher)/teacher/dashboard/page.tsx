@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 
 import ClassPerformanceChart from "@/components/teacher/ClassPerformanceChart";
 import EarlyWarningSystem from "@/components/teacher/EarlyWarningSystem";
+import CollapsibleSection from "@/components/shared/CollapsibleSection";
 import type { TeacherClassWithStudents, TeacherStudent } from "@/components/teacher/types";
 import type { StudentFromClassResponse } from "@/components/student/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -174,14 +175,14 @@ export default async function TeacherDashboardPage() {
         </Card>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Early Warning System</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <EarlyWarningSystem students={allStudents} />
-        </CardContent>
-      </Card>
+      <CollapsibleSection
+        title="Early Warning System"
+        badge={highRiskCount}
+        badgeColor="red"
+        defaultOpen={false}
+      >
+        <EarlyWarningSystem students={allStudents} />
+      </CollapsibleSection>
 
       <Card>
         <CardHeader>

@@ -46,15 +46,15 @@ export default function StudentLayout({ children, studentName, className }: Stud
 
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-20 flex w-72 flex-col border-r bg-background p-4 transition-transform md:static md:translate-x-0",
+          "absolute top-0 left-0 z-20 flex h-screen w-72 shrink-0 flex-col border-r bg-background transition-transform md:sticky md:translate-x-0",
           isOpen ? "translate-x-0" : "-translate-x-full",
         )}
       >
-        <div className="mt-12 md:mt-0">
+        <div className="border-b p-4 pt-16 md:pt-4">
           <p className="text-lg font-semibold">Панель студента</p>
         </div>
 
-        <nav className="mt-6 space-y-2">
+        <nav className="flex-1 space-y-2 overflow-y-auto py-4 px-4">
           {NAV_LINKS.map((link) => {
             const isActive = pathname === link.href;
             return (
@@ -73,7 +73,7 @@ export default function StudentLayout({ children, studentName, className }: Stud
           })}
         </nav>
 
-        <div className="mt-auto space-y-4 rounded-lg border p-3">
+        <div className="mt-auto shrink-0 space-y-4 border-t p-4">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
               {initials}
@@ -102,7 +102,7 @@ export default function StudentLayout({ children, studentName, className }: Stud
         />
       ) : null}
 
-      <main className="flex-1 p-4 pt-16 md:p-6 md:pt-6">{children}</main>
+      <main className="flex-1 overflow-y-auto p-4 pt-16 md:p-6 md:pt-6">{children}</main>
     </div>
   );
 }
