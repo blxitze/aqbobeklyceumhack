@@ -1,0 +1,104 @@
+---
+description: Pusher realtime rules, channel naming, event taxonomy, and kiosk update contracts
+globs:
+  - "app/api/**/*.ts"
+  - "lib/realtime/**/*.ts"
+  - "app/kiosk/**/*.tsx"
+  - "components/kiosk/**/*.tsx"
+alwaysApply: true
+---
+
+# Realtime Rules (Pusher)
+
+## Global Non-Negotiables
+1. FastAPI is never called from browser; realtime data must come from Next.js APIs/services.
+2. OpenAI is unrelated to realtime transport and must not be used inside trigger handlers.
+3. Realtime payloads carry deterministic analytics outputs only.
+4. Schedule realtime in MVP is one-day substitution/generation scope.
+5. Logistic Regression remains deterministic source of risk values.
+6. Mock BilimClass data feeding realtime widgets must stay realistic.
+7. Kiosk must use Pusher, `AnimatePresence`, 10s rotation, 48px+ visual scale.
+8. Keep-alive ping remains server-side, not Pusher heartbeat replacement.
+
+## Channel Naming Convention (Required)
+- Format: `school-{schoolId}-{domain}`
+- Allowed domains:
+  - `schedule`
+  - `kiosk`
+  - `notifications`
+- Examples:
+  - `school-aqbobek-schedule`
+  - `school-aqbobek-kiosk`
+
+## Event Naming Convention (Required)
+- Use kebab-case past-tense domain events:
+  - `schedule-generated`
+  - `schedule-substituted`
+  - `kiosk-slide-updated`
+  - `notification-created`
+- No generic events like `update` or `changed`.
+
+## Payload Contracts
+- `schedule-generated`:
+  - `day`
+  - `version`
+  - `slots[]`
+- `schedule-substituted`:
+  - `day`
+  - `teacherId`
+  - `diff[]`
+- `kiosk-slide-updated`:
+  - `slideType`
+  - `title`
+  - `items[]`
+  - `updatedAt`
+
+All payloads must be JSON-serializable, size-conscious, and typed.
+
+## Trigger Rules
+- Trigger from backend only (Next.js route handlers or server services).
+- Trigger after successful transaction/commit, not before.
+- Include idempotency key/version where replay safety matters.
+
+## Kiosk-Specific Rules
+- Client subscribes to kiosk channel and updates slides state atomically.
+- Animate transitions via `AnimatePresence`.
+- Keep 10s auto-rotation independent from realtime arrival.
+- UI must not require mouse interactions.
+
+## Forbidden Patterns
+- DON'T trigger Pusher from client components with secret key.
+- DON'T send full database rows when only diff is needed.
+- DON'T use realtime event handlers to run business-critical calculations.
+- DON'T emit weekly schedule events for MVP unless feature flag says bonus mode.
+
+## DO / DON'T Examples
+
+### DO: Scoped, explicit event trigger
+```ts
+await pusherServer.trigger("school-aqbobek-schedule", "schedule-substituted", {
+  day: "2026-03-29",
+  teacherId: "t_123",
+  diff,
+  version,
+});
+```
+
+### DON'T: Ambiguous and oversized broadcast
+```ts
+await pusher.trigger("all", "update", entireDatabaseDump);
+```
+
+### DO: Kiosk listener with deterministic rotation
+```ts
+useEffect(() => {
+  const id = setInterval(nextSlide, 10000);
+  return () => clearInterval(id);
+}, []);
+```
+
+### DON'T: Realtime as analytics engine
+```ts
+// forbidden
+channel.bind("grades-received", async (data) => computeRiskWithLLM(data));
+```

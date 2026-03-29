@@ -1,0 +1,105 @@
+---
+description: Strict 3-layer AI architecture (Data -> Logic -> LLM) with explicit forbidden patterns
+globs:
+  - "app/api/ai/**/*.ts"
+  - "lib/ai/**/*.ts"
+  - "fastapi/**/*.py"
+  - "services/**/*.py"
+alwaysApply: true
+---
+
+# AI Layer Governance Rules
+
+## Mandatory Architecture: 3 Layers Only
+- Layer 1 `Data`:
+  - retrieve factual records (grades, attendance, topics, schedules).
+- Layer 2 `Logic`:
+  - deterministic computation (Logistic Regression, graph analysis, heuristics, CP-SAT).
+- Layer 3 `LLM`:
+  - transform deterministic JSON into human-readable explanations.
+
+Any AI feature violating this layer order is invalid.
+
+## Global Non-Negotiables
+1. FastAPI is internal-only behind Next.js route handlers with `X-Internal-Token`.
+2. OpenAI is used in exactly three outputs:
+   - student tutor text,
+   - teacher report text,
+   - parent weekly summary text.
+3. Risk score, knowledge graph root topic, and career hint are always algorithm-first.
+4. CP-SAT scheduling scope is one day in MVP.
+5. Logistic Regression is required classifier.
+6. Mock BilimClass data realism constraints are mandatory.
+7. Kiosk constraints are fixed product requirements (48px+, no mouse-first, Pusher, 10s, AnimatePresence).
+8. FastAPI keep-alive every 5 minutes is required operationally.
+
+## Allowed OpenAI Invocation Points
+- `POST /api/ai/tutor`
+- `POST /api/ai/report`
+- `POST /api/ai/parent-summary`
+
+No other endpoint may invoke OpenAI without explicit architecture change approval.
+
+## Required JSON Contracts Before LLM
+- Tutor contract minimum fields:
+  - `studentId`
+  - `riskScore` (0..1)
+  - `rootTopic`
+  - `careerHint`
+  - `reasoningTrace` (array of algorithmic steps)
+- Teacher report and parent summary contracts must include:
+  - source period/date range,
+  - aggregate metrics,
+  - deterministic findings list.
+
+## Explainability Rules
+- Each response must preserve:
+  - algorithm used,
+  - key inputs,
+  - transformation step summary.
+- LLM prompts must instruct:
+  - keep numbers unchanged,
+  - no invented facts,
+  - mention uncertainty only when input data is missing.
+
+## Forbidden Patterns (Hard Fail)
+- NEVER call OpenAI to compute:
+  - risk score,
+  - root topic,
+  - career recommendation score,
+  - schedule optimization decisions.
+- NEVER skip Layer 2 and send raw DB records directly for "analysis" classification.
+- NEVER allow client code to inject prompt instructions that alter algorithm outputs.
+
+## DO / DON'T Examples
+
+### DO: Data -> Logic -> LLM
+```ts
+const metrics = await fastapiAnalyzeStudent(studentId); // deterministic
+const text = await generateTutorText(metrics); // narrative only
+return { ...metrics, text };
+```
+
+### DON'T: Data -> LLM direct analytics
+```ts
+// forbidden
+const text = await openai.responses.create({
+  model: "gpt-4.1",
+  input: `Analyze this grade history and give risk score: ${JSON.stringify(grades)}`,
+});
+```
+
+### DO: Preserve numeric truth
+```py
+prompt = f"""
+Use this JSON as the only source of truth.
+Do not change numeric values.
+JSON: {analysis_json}
+"""
+```
+
+### DON'T: Let LLM infer new metrics
+```py
+# forbidden
+prompt = "Improve and adjust metrics if needed for better motivation."
+```

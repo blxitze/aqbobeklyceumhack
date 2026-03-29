@@ -1,0 +1,90 @@
+---
+description: Frontend rules for Next.js 15, TypeScript, Tailwind, shadcn/ui, Framer Motion
+globs:
+  - "app/**/*.ts"
+  - "app/**/*.tsx"
+  - "components/**/*.ts"
+  - "components/**/*.tsx"
+  - "lib/**/*.ts"
+alwaysApply: true
+---
+
+# Frontend Rulebook (Enforced)
+
+## Global Non-Negotiables
+1. Never call FastAPI from browser/client components; call only Next.js API routes.
+2. OpenAI is only for tutor/report/parent-summary textual generation; nowhere in UI logic.
+3. UI must display algorithm-generated analytics, not LLM-generated numbers.
+4. CP-SAT UI scope is one-day schedule for MVP.
+5. Logistic Regression language should be preserved in UI copy and docs.
+6. Mock data must reflect Kazakh names and Russian subject names with 0-100 scores.
+7. Kiosk page must be no-mouse-first, `48px+`, `AnimatePresence`, Pusher, 10s auto-slide.
+8. Keep-alive is backend responsibility; frontend must not fake it with client timers.
+
+## Component and App Router Rules
+- Use Server Components by default; add `"use client"` only for interactivity.
+- Keep page files thin: fetch + compose; move reusable logic to `lib/` or `components/`.
+- Use typed route helpers for API calls; no raw `fetch("/api/...")` spread across components.
+- Validate API responses with Zod before rendering critical analytics blocks.
+
+## TypeScript Rules
+- `strict` semantics required: no implicit `any`, no untyped props.
+- Define DTO types for:
+  - `TutorAnalysisDTO` (`riskScore`, `rootTopic`, `careerHint`, `reasoningTrace`),
+  - `TeacherReportDTO`,
+  - `ParentSummaryDTO`.
+- Do not use union of unrelated "maybe fields"; create clear discriminated unions.
+
+## Tailwind + shadcn/ui Rules
+- Use Tailwind tokens and existing shadcn primitives before custom CSS.
+- Prefer semantic wrappers (`Card`, `Badge`, `Alert`) over raw div-only UI.
+- Avoid inline style objects except dynamic animation transforms.
+- For kiosk typography, enforce utility classes that result in effective `>=48px`.
+
+## Framer Motion Rules (Kiosk)
+- Use `AnimatePresence` for slide transitions.
+- Motion variants must be declared outside render body to avoid reallocation.
+- Auto-slide interval must be exactly 10 seconds in MVP (`10000ms`).
+- Provide keyboard-free fallback loops; kiosk should run unattended.
+
+## Realtime Integration Rules
+- Kiosk and admin schedule widgets subscribe to Pusher channels only via client-safe key.
+- Channel names and event names must match backend contract exactly (see `realtime.mdc`).
+- Do not place business decisions in Pusher listeners; only render received state.
+
+## Forbidden Frontend Patterns
+- DON'T import FastAPI URL in client code.
+- DON'T include `INTERNAL_SECRET` or `X-Internal-Token` in client bundles.
+- DON'T call OpenAI directly from React components.
+- DON'T calculate risk score/career hint in frontend.
+
+## DO / DON'T Examples
+
+### DO: Call Next.js API from UI
+```ts
+const res = await fetch("/api/ai/tutor", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ studentId }),
+});
+```
+
+### DON'T: Call FastAPI from browser
+```ts
+await fetch(`${process.env.NEXT_PUBLIC_FASTAPI_URL}/ai/analyze/123`, {
+  headers: { "X-Internal-Token": "..." },
+});
+```
+
+### DO: Render algorithm outputs explicitly
+```tsx
+<Stat label="Risk score" value={`${Math.round(data.riskScore * 100)}%`} />
+<p>Root topic: {data.rootTopic}</p>
+<p>Career hint: {data.careerHint}</p>
+```
+
+### DON'T: Ask LLM for numeric risk
+```ts
+// forbidden: AI produces score directly
+const risk = await generateRiskWithLLM(studentHistory);
+```

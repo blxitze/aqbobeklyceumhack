@@ -1,0 +1,97 @@
+---
+description: Prisma database conventions, naming, schema boundaries, and seed rules
+globs:
+  - "prisma/schema.prisma"
+  - "prisma/seed.ts"
+  - "prisma/**/*.ts"
+  - "lib/db/**/*.ts"
+alwaysApply: true
+---
+
+# Database Rules (Prisma + Seed)
+
+## Global Non-Negotiables
+1. FastAPI is never exposed to browser; DB writes from browser go through Next.js routes.
+2. OpenAI is not a database computation tool; only text on top of deterministic outputs.
+3. Analytics values stored/passed to DB must come from deterministic Python logic.
+4. Schedule schema MVP must support one-day solver workflow first.
+5. Model references and docs must state Logistic Regression (not XGBoost).
+6. Mock BilimClass seed realism is mandatory (KZ names, RU subjects, scores 0-100).
+7. Kiosk data tables must support realtime payload generation and large typography content.
+8. Keep-alive metadata/logging can be stored but must not create heavy write load.
+
+## Prisma Schema Conventions
+- Model names: PascalCase singular (`Student`, `GradeRecord`, `ScheduleSlot`).
+- DB table names: snake_case plural via `@@map` (`students`, `grade_records`).
+- Field names: `camelCase` in Prisma, mapped columns allowed via `@map`.
+- IDs: `String @id @default(cuid())` unless numeric compatibility required.
+- Timestamps:
+  - `createdAt DateTime @default(now())`
+  - `updatedAt DateTime @updatedAt`
+- Enums for constrained fields (`Role`, `AttendanceStatus`, `SubjectCode` where useful).
+
+## Relational Rules
+- Must model:
+  - student <- grade records,
+  - class <- students,
+  - schedule slot <- teacher + room + class + day.
+- Avoid nullable foreign keys for required domain relations.
+- Add composite unique constraints where domain requires (`classId`, `date`, `slotIndex`).
+
+## Seed Data Rules
+- Required minimum seed density:
+  - 3 classes,
+  - 25 students each,
+  - 5 subjects each,
+  - 10 grade records per subject.
+- Subject names in Russian (e.g., `Математика`, `Физика`, `История`, `Информатика`, `Биология`).
+- Student names should be realistic Kazakh-style full names.
+- Score values must be integer in `[0, 100]`.
+- Attendance values should be realistic distribution (not all present, not all absent).
+
+## Query and Mutation Rules
+- Use Prisma in server-only files.
+- Use transactions for multi-entity updates (e.g., schedule substitution + notifications record).
+- Never leak raw DB error objects in API response.
+- Centralize pagination/filter helpers for list endpoints.
+
+## Forbidden Patterns
+- DON'T seed with placeholder names like `Student 1`, `Test User`.
+- DON'T use floating or out-of-range score values.
+- DON'T store LLM-generated metrics as canonical truth fields.
+- DON'T create schema fields implying weekly CP-SAT MVP dependency unless feature flagged.
+
+## DO / DON'T Examples
+
+### DO: Constrained score and attendance modeling
+```prisma
+model GradeRecord {
+  id          String           @id @default(cuid())
+  studentId   String
+  subjectName String
+  topic       String
+  score       Int
+  attendance  AttendanceStatus
+  date        DateTime
+  student     Student          @relation(fields: [studentId], references: [id])
+}
+```
+
+### DON'T: Ambiguous generic score column
+```prisma
+model Grades {
+  id    String @id
+  value Float // forbidden: can exceed 100 and lacks semantics
+}
+```
+
+### DO: Realistic seed generation shape
+```ts
+const subjects = ["Математика", "Физика", "История", "Информатика", "Биология"];
+const score = faker.number.int({ min: 35, max: 98 });
+```
+
+### DON'T: Placeholder seed data
+```ts
+await prisma.student.create({ data: { fullName: "Student 1", classId: "A" } });
+```

@@ -1,0 +1,104 @@
+---
+description: Backend Next.js route handler, NextAuth v5, Prisma patterns
+globs:
+  - "app/api/**/*.ts"
+  - "lib/server/**/*.ts"
+  - "lib/auth/**/*.ts"
+  - "prisma/**/*.ts"
+alwaysApply: true
+---
+
+# Next.js Backend Rules (Route Handlers + Auth + Prisma)
+
+## Global Non-Negotiables
+1. Browser never reaches FastAPI directly; route handlers are mandatory gateway.
+2. Every Next.js -> FastAPI request must include `X-Internal-Token`.
+3. OpenAI is allowed only in `/api/ai/tutor`, `/api/ai/report`, `/api/ai/parent-summary` flows.
+4. Analytics must come from Python algorithms; route handlers forward JSON for text generation only.
+5. CP-SAT endpoints are day-scope only for MVP.
+6. Logistic Regression language and contracts are fixed.
+7. Mock BilimClass responses must remain realistic KZ school domain data.
+8. Keep-alive ping to FastAPI every 5 minutes is required.
+
+## Route Handler Template (Required)
+- Each handler must follow sequence:
+  1) authenticate session,
+  2) authorize role,
+  3) validate payload with Zod,
+  4) call domain service (Prisma/FastAPI/Pusher),
+  5) return typed JSON with explicit status.
+- No direct heavy business logic inside route files.
+
+## NextAuth v5 Rules
+- Use role-based guards for STUDENT / TEACHER / PARENT / ADMIN.
+- Never trust `role` from request body or query params.
+- Session lookup is server-side only.
+- Protected route handlers must return 401/403 deterministically.
+
+## FastAPI Gateway Rules
+- Build internal HTTP client utility in server-only module.
+- Add headers:
+  - `Content-Type: application/json`
+  - `X-Internal-Token: process.env.INTERNAL_SECRET`
+- Add timeout and clear error mapping:
+  - 4xx pass-through with safe message,
+  - 5xx mapped to operational error response.
+
+## AI Endpoints Rules
+- Allowed endpoints:
+  - `/api/ai/tutor`
+  - `/api/ai/report`
+  - `/api/ai/parent-summary`
+- Mandatory flow in handler:
+  1) call FastAPI deterministic analytics/report builder,
+  2) receive structured JSON,
+  3) invoke OpenAI for human-readable text only.
+- Forbidden:
+  - any new OpenAI endpoint without explicit product approval,
+  - OpenAI-generated scores/labels/classifications.
+
+## Prisma Rules
+- Read/write operations go through repository/service layer.
+- Never expose raw Prisma errors to client; map to stable API errors.
+- Use transactions for multi-write schedule updates.
+- Maintain consistent date handling (UTC at storage boundaries).
+
+## Keep-Alive Rule
+- Implement server-only scheduler/cron endpoint that pings FastAPI every 5 minutes.
+- Keep-alive request must use internal token and lightweight health route.
+
+## Forbidden Patterns
+- DON'T place `INTERNAL_SECRET` in client-exposed env vars.
+- DON'T call FastAPI from React components.
+- DON'T use XGBoost references in route contracts or docs.
+- DON'T add weekly CP-SAT generation in MVP API handlers.
+
+## DO / DON'T Examples
+
+### DO: Route handler calling FastAPI internally
+```ts
+const response = await fastapiClient.post(`/ai/analyze/${studentId}`, payload, {
+  headers: { "X-Internal-Token": process.env.INTERNAL_SECRET! },
+});
+```
+
+### DON'T: Accept role from client for authorization
+```ts
+// forbidden
+if (body.role === "ADMIN") {
+  return runAdminAction();
+}
+```
+
+### DO: Allowed OpenAI usage as text finalization
+```ts
+const analysis = await getDeterministicAnalysis(studentId);
+const text = await generateTutorText(analysis); // text only
+return NextResponse.json({ ...analysis, text });
+```
+
+### DON'T: Generate score with LLM
+```ts
+// forbidden
+const riskScore = await llmRiskEstimator(studentHistory);
+```

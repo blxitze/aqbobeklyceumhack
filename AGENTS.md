@@ -1,0 +1,152 @@
+# AGENTS.md - Aqbobek Lyceum Portal
+
+This file defines project context and implementation constraints for all AI/code agents working in this repository.
+
+## 1) Product and Mission Context
+
+- Product: multi-role school portal for Aqbobek Lyceum hackathon.
+- Core value:
+  - student learning analytics and actionable tutoring text,
+  - teacher early warning and one-click reports,
+  - parent weekly summary,
+  - admin scheduling and operations.
+- Judge-facing principle: explainable AI with deterministic algorithmic core.
+
+## 2) Locked Architecture Decisions (Do Not Redesign)
+
+### Runtime Topology
+- Frontend + API gateway: Next.js 15 App Router.
+- Data app backend: Next.js Route Handlers + Prisma -> PostgreSQL.
+- Algorithmic backend: FastAPI + SQLAlchemy + scikit-learn + networkx + OR-Tools.
+- Realtime layer: Pusher for schedule updates and kiosk slides.
+- Hosting: Railway (Next.js, FastAPI, PostgreSQL services).
+
+### Internal Call Graph
+- Browser -> Next.js page/API only.
+- Next.js API -> FastAPI for heavy analytics/scheduling only.
+- Next.js API -> FastAPI must include `X-Internal-Token`.
+- FastAPI is private/internal service, never browser-exposed.
+
+## 3) Non-Negotiable Constraints (Must Be Enforced Everywhere)
+
+1. FastAPI is NEVER called from browser directly; only via Next.js Route Handlers with `X-Internal-Token`.
+2. OpenAI usage exists in EXACTLY 3 features:
+   - AI tutor text,
+   - teacher report text,
+   - parent summary text.
+3. All analytics are computed by Python algorithms first; LLM only verbalizes JSON output.
+4. CP-SAT schedule solver MVP scope is ONE DAY only.
+5. Logistic Regression is mandatory model choice; do not replace with XGBoost.
+6. Mock BilimClass API must return realistic KZ school data:
+   - Kazakh names,
+   - Russian subject names,
+   - score range `0-100`.
+7. Kiosk Mode requirements:
+   - no mouse-dependent UI,
+   - `48px+` typography,
+   - Framer Motion `AnimatePresence`,
+   - Pusher real-time integration,
+   - 10-second auto-slide.
+8. Railway cold start prevention:
+   - ping FastAPI every 5 minutes.
+
+## 4) AI Layer Rules (Judge Explainability First)
+
+- Canonical pipeline:
+  - `Data Layer`: grades, attendance, topics, schedule records.
+  - `Logic Layer`: LogisticRegression, networkx prerequisite analysis, CP-SAT outputs, heuristics.
+  - `AI Layer`: OpenAI text generation only from structured JSON.
+- Every AI-facing endpoint must preserve:
+  - input provenance (student/class IDs, date range),
+  - algorithm outputs (`risk_score`, `root_topic`, `career_hint`, etc.),
+  - prompt context with explicit "do not alter numbers" instruction.
+- Forbidden:
+  - LLM-generated numeric predictions,
+  - LLM-selected graph root cause,
+  - LLM-generated schedule decisions.
+
+## 5) Role and Route Map
+
+### App Routes
+- `/(auth)/login`
+- `/(student)/dashboard`
+- `/(student)/portfolio`
+- `/(student)/schedule`
+- `/(student)/leaderboard`
+- `/(teacher)/dashboard`
+- `/(teacher)/class/[id]`
+- `/(teacher)/reports`
+- `/(parent)/dashboard`
+- `/(admin)/dashboard`
+- `/(admin)/schedule`
+- `/(admin)/notifications`
+- `/kiosk`
+
+### API Routes (Next.js)
+- `/api/bilimclass/grades`
+- `/api/bilimclass/students`
+- `/api/ai/tutor`
+- `/api/ai/report`
+- `/api/ai/parent-summary`
+- `/api/schedule/generate`
+- `/api/schedule/substitute`
+
+### FastAPI Endpoints (internal-only)
+- `POST /ai/analyze/{student_id}`
+- `POST /ai/tutor-text`
+- `POST /schedule/generate`
+- `POST /schedule/substitute`
+
+## 6) Data and Domain Conventions
+
+- Naming:
+  - DB tables/models: singular PascalCase in Prisma model names, plural snake_case DB tables via `@@map`.
+  - API payload keys: `camelCase`.
+  - Python DTO fields: `snake_case` internally, converted at boundaries if needed.
+- Scores:
+  - integer `0..100` only.
+- Attendance:
+  - normalized enum (`present`, `absent`, `late`, `excused`) or strict boolean + reason.
+- Subjects:
+  - Russian names only for mock BilimClass records.
+- Students:
+  - realistic Kazakh first/last names, consistent class IDs.
+
+## 7) Security and Access Rules
+
+- NextAuth v5 role checks required on all non-public pages and APIs.
+- Do not trust client-provided role; derive from session in route handlers.
+- `INTERNAL_SECRET` must never be returned to client.
+- Internal calls to FastAPI must include:
+  - `X-Internal-Token: process.env.INTERNAL_SECRET`
+  - request timeout + retry policy.
+
+## 8) Performance and Reliability Rules
+
+- Keep-alive cron/interval from Next.js backend to FastAPI every 5 minutes.
+- All FastAPI calls from Next.js must have explicit timeout.
+- Pusher event payloads should be minimal and typed.
+- Kiosk rendering must avoid layout thrash; precompute slide payloads.
+
+## 9) Engineering Workflow Rules for Agents
+
+- Prefer incremental PR-sized changes; avoid broad refactors unless asked.
+- Any feature touching AI must include:
+  - deterministic algorithm step,
+  - JSON contract,
+  - optional LLM text layer (only in allowed 3 routes).
+- If task asks for "MVP", reject full-week CP-SAT scope.
+- If task proposes XGBoost, replace with LogisticRegression and explain reason in comments/docs.
+- When adding new endpoint, specify whether it is:
+  - browser-facing (Next.js route),
+  - internal-only (FastAPI).
+
+## 10) Acceptance Checklist (Pre-merge)
+
+- [ ] No browser -> FastAPI direct requests.
+- [ ] OpenAI appears only in tutor/report/parent summary flows.
+- [ ] Risk/graph/career analytics computed before LLM call.
+- [ ] CP-SAT logic constrained to one-day planning in MVP paths.
+- [ ] Mock BilimClass data realism constraints satisfied.
+- [ ] Kiosk mode satisfies accessibility/display/realtime requirements.
+- [ ] FastAPI keep-alive active at 5-minute interval.

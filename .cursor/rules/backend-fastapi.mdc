@@ -1,0 +1,115 @@
+---
+description: FastAPI rules for SQLAlchemy, scikit-learn Logistic Regression, CP-SAT, OpenAI SDK
+globs:
+  - "fastapi/**/*.py"
+  - "services/fastapi/**/*.py"
+  - "**/*fastapi*.py"
+alwaysApply: true
+---
+
+# FastAPI Backend Rules
+
+## Global Non-Negotiables
+1. FastAPI is internal-only and never browser-facing.
+2. Every request from Next.js must include valid `X-Internal-Token`.
+3. OpenAI can be used only for tutor/report/parent-summary text synthesis.
+4. Analytics (`risk_score`, `root_topic`, `career_hint`) must be computed algorithmically first.
+5. Use `sklearn.linear_model.LogisticRegression`, not XGBoost.
+6. CP-SAT schedule generation MVP is single-day only.
+7. Mock BilimClass-derived datasets must keep realistic KZ school semantics.
+8. Keep-alive endpoint must support 5-minute ping.
+
+## API Security and Boundary Rules
+- Add middleware/dependency guard validating `X-Internal-Token`.
+- Reject missing/invalid token with 401.
+- Do not enable permissive CORS for public browser origins.
+- Expose only required internal endpoints:
+  - `/ai/analyze/{student_id}`
+  - `/ai/tutor-text`
+  - `/schedule/generate`
+  - `/schedule/substitute`
+  - `/healthz` (for keep-alive/health check)
+
+## Data/Logic/LLM Separation Rules
+- `/ai/analyze/{student_id}`:
+  - reads grades/attendance/topic history,
+  - computes Logistic Regression probability,
+  - computes root topic via networkx prerequisite graph,
+  - computes career hint heuristically/rule-based.
+- `/ai/tutor-text`:
+  - input: deterministic JSON output from analyze step,
+  - output: natural language explanation only.
+- Never compute numeric score in `/ai/tutor-text`.
+
+## scikit-learn Rules
+- Use deterministic training settings (`random_state` fixed).
+- Persist model metadata for explainability (features, coefficients, intercept).
+- Input feature pipeline must be explicit and testable.
+- Keep probability as `0..1` float and return both raw and percentage-friendly values when needed.
+
+## networkx Rules
+- Build prerequisite graph with explicit directed edges: `prereq -> dependent`.
+- Root topic logic must be traceable:
+  - include traversed nodes/edges in reasoning trace output.
+- Do not let LLM infer prerequisite relations.
+
+## CP-SAT Rules
+- Time horizon: one day only (MVP hard cap).
+- Hard constraints:
+  - teacher cannot be in two classes at same slot,
+  - room cannot host two classes at same slot.
+- Substitution endpoint must:
+  - update teacher availability for current day,
+  - recompute current day,
+  - return diff payload for Pusher publishing.
+- Full-week re-optimization is explicitly non-MVP.
+
+## OpenAI SDK Rules
+- Allowed usage:
+  - tutor text,
+  - teacher report text,
+  - parent summary text.
+- Prompt must include deterministic JSON as source-of-truth.
+- Prompt must include "do not alter numeric values".
+- Forbidden:
+  - asking LLM to classify risk level from raw history,
+  - asking LLM to generate schedule assignments.
+
+## SQLAlchemy Rules
+- Keep models normalized and aligned with Prisma entities via clear mapping docs.
+- Use session-per-request pattern.
+- Use explicit transaction boundaries around substitute+recompute flow.
+
+## DO / DON'T Examples
+
+### DO: Deterministic analyze endpoint
+```py
+risk_score = lr_model.predict_proba([features])[0][1]
+root_topic = find_root_topic_with_graph(topic_graph, weak_topics)
+career_hint = infer_career_hint(strong_subjects)
+return {
+    "risk_score": float(risk_score),
+    "root_topic": root_topic,
+    "career_hint": career_hint,
+}
+```
+
+### DON'T: LLM does numeric prediction
+```py
+# forbidden
+risk_score = llm_predict("Estimate fail probability from these grades")
+```
+
+### DO: One-day CP-SAT horizon
+```py
+model = cp_model.CpModel()
+for slot in day_slots:
+    add_teacher_room_constraints(model, slot, lessons)
+```
+
+### DON'T: Weekly solver in MVP
+```py
+# forbidden in MVP
+for day in week_days:
+    solve_full_day(day)
+```

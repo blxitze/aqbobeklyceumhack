@@ -1,0 +1,39 @@
+# Aqbobek Lyceum Portal - Cursor Rules (Short)
+
+## Scope
+- Stack: Next.js 15 + TypeScript + Tailwind + shadcn/ui + Framer Motion, FastAPI, Prisma/PostgreSQL, SQLAlchemy, scikit-learn, OR-Tools CP-SAT, Pusher.
+- Default language: English in code/docs; business labels can be RU/KZ.
+
+## Non-Negotiable Architecture
+1. Browser NEVER calls FastAPI directly.
+   - Only `Next.js route handlers` can call FastAPI.
+   - Must include `X-Internal-Token` header on every Next.js -> FastAPI call.
+2. OpenAI is allowed in exactly 3 features only:
+   - `/api/ai/tutor`
+   - `/api/ai/report`
+   - `/api/ai/parent-summary`
+3. AI flow is always: `Data -> Logic -> JSON -> LLM text`.
+   - Risk score, root topic, knowledge graph, career hint are computed in Python first.
+4. CP-SAT solver MVP scope is one day only.
+   - Weekly solver is explicitly non-MVP bonus.
+5. Use `LogisticRegression` (scikit-learn), not XGBoost.
+6. Mock BilimClass data must be realistic:
+   - Kazakh full names, RU subject names, scores in `[0..100]`.
+7. Kiosk mode requirements are mandatory:
+   - No mouse-first interactions, min `48px` typography, `AnimatePresence`, Pusher realtime, `10s` auto-slide.
+8. Railway anti-sleep:
+   - Keep-alive ping to FastAPI every 5 minutes.
+
+## Forbidden Patterns
+- NEVER import OpenAI SDK in client components.
+- NEVER compute risk score or career hint with LLM.
+- NEVER expose FastAPI base URL to browser code.
+- NEVER send requests to FastAPI without `X-Internal-Token`.
+- NEVER implement CP-SAT over full week in MVP tasks.
+- NEVER seed mock data with non-school-like or random placeholder values.
+
+## Coding Standards
+- TypeScript strict mode: avoid `any`, prefer Zod validation on boundaries.
+- Route handlers must validate input, authorize role, call service, and return typed JSON.
+- Keep business logic out of React components and route files; place in service modules.
+- Add tests for core algorithms and route-contract behavior.
