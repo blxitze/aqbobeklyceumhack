@@ -18,7 +18,10 @@ class SubjectRisk(BaseModel):
 
 class AnalyzeResponse(BaseModel):
     studentId: str
+    riskScore: float = 0.0
+    riskPercent: int = 0
     riskLevel: str
+    highestRiskSubject: str = ""
     subjectRisks: list[SubjectRisk]
     strengths: list[str]
     weaknesses: list[str]

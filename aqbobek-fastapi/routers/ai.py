@@ -40,36 +40,45 @@ async def analyze_student(
 
     risk = compute_risk(grades, student_id)
 
-    topics_orm = db.query(Topic).all()
-    graph = build_knowledge_graph(topics_orm)
+    highest_risk_subject = risk.get("highestRiskSubject", "")
+    subject_risks = risk.get("subjectRisks", [])
+    highest_subject_risk = next(
+        (sr for sr in subject_risks if sr.get("subject") == highest_risk_subject),
+        subject_risks[0] if subject_risks else None,
+    )
 
-    all_weak = []
-    for sr in risk["subjectRisks"]:
-        all_weak.extend(sr.get("missedTopics", []))
+    # Build graph ONLY for highest-risk subject to avoid cross-subject paths.
+    subject_topics_orm = db.query(Topic).filter(Topic.subject == highest_risk_subject).all()
+    graph = build_knowledge_graph(subject_topics_orm)
 
-    root_problem = find_root_problem(all_weak, graph)
+    weak_topics = highest_subject_risk.get("missedTopics", []) if highest_subject_risk else []
+    root_problem = find_root_problem(weak_topics, graph)
 
-    study_path: list[str] = []
-    if risk["subjectRisks"] and all_weak:
-        worst_subject = risk["subjectRisks"][0]
-        if worst_subject.get("missedTopics"):
-            target = worst_subject["missedTopics"][0]
-            study_path = get_study_path(root_problem, target, graph)
+    learning_path: list[str] = []
+    if weak_topics:
+        target = weak_topics[0]
+        learning_path = get_study_path(root_problem, target, graph)
+        # Guard against edge cases where path function falls back.
+        if any(topic not in graph for topic in learning_path):
+            learning_path = [root_problem]
 
-    subject_risks = [
+    typed_subject_risks = [
         SubjectRisk(**sr) for sr in risk["subjectRisks"]
     ]
 
     return AnalyzeResponse(
         studentId=student_id,
+        riskScore=risk["riskScore"],
+        riskPercent=risk["riskPercent"],
         riskLevel=risk["riskLevel"],
-        subjectRisks=subject_risks,
+        highestRiskSubject=highest_risk_subject,
+        subjectRisks=typed_subject_risks,
         strengths=risk["strengths"],
         weaknesses=risk["weaknesses"],
         careerHint=risk["careerHint"],
         attendanceWarning=risk["attendanceWarning"],
         rootProblem=root_problem,
-        studyPath=study_path,
+        studyPath=learning_path,
     )
 
 
@@ -80,17 +89,20 @@ async def get_tutor_text(
 ):
     a = request.analyzeResult
     worst = a.subjectRisks[0] if a.subjectRisks else None
-    prob_pct = round((worst.failureProbability if worst else 0.3) * 100)
-    worst_subject = worst.subject if worst else "неизвестный предмет"
+    risk_percent = int(a.riskPercent)
+    risk_level = a.riskLevel
+    highest_risk_subject = a.highestRiskSubject or (worst.subject if worst else "неизвестный предмет")
+    root_topic = a.rootProblem or "Нет проблемных тем"
+    learning_path = a.studyPath or ([root_topic] if root_topic else [])
 
     api_key = os.getenv("OPENAI_API_KEY", "")
 
     if not api_key:
-        path_str = " -> ".join(a.studyPath) if a.studyPath else a.rootProblem
+        path_str = " -> ".join(learning_path) if learning_path else root_topic
         grade_info = ""
         if worst:
             grade_info = (
-                f"Твой итоговый процент по {worst_subject}: "
+                f"Твой итоговый процент по {highest_risk_subject}: "
                 f"{worst.finalPercent}% "
                 f"(ФО: {worst.foPercent}%, "
                 f"СОР: {worst.sorPercent}%, "
@@ -98,10 +110,9 @@ async def get_tutor_text(
                 f"Прогнозируемая оценка: {worst.predictedGrade}. "
             )
         text = (
-            f"С вероятностью {prob_pct}% ты можешь получить 2 "
-            f"на следующем СОЧ по {worst_subject}. "
+            f"Риск по предмету {highest_risk_subject}: {risk_percent}% ({risk_level}). "
             f"{grade_info}"
-            f"Корень проблемы - тема «{a.rootProblem}». "
+            f"Корень проблемы - тема «{root_topic}». "
             f"Изучи в порядке: {path_str}. "
             f"{a.careerHint}."
         )
@@ -109,25 +120,12 @@ async def get_tutor_text(
 
     client = OpenAI(api_key=api_key)
 
-    context = {
-        "riskLevel": a.riskLevel,
-        "worstSubject": worst_subject,
-        "failureProbabilityPercent": prob_pct,
-        "rootProblem": a.rootProblem,
-        "studyPath": a.studyPath,
-        "strengths": a.strengths,
-        "careerHint": a.careerHint,
-        "subjectSummary": [
-            {
-                "subject": sr.subject,
-                "finalPercent": sr.finalPercent,
-                "predictedGrade": sr.predictedGrade,
-                "foPercent": sr.foPercent,
-                "sorPercent": sr.sorPercent,
-                "socPercent": sr.socPercent,
-            }
-            for sr in a.subjectRisks[:3]
-        ],
+    clean_context = {
+        "risk_percent": risk_percent,
+        "risk_level": risk_level,
+        "highest_risk_subject": highest_risk_subject,
+        "root_topic": root_topic,
+        "learning_path": learning_path,
     }
 
     response = client.chat.completions.create(
@@ -145,13 +143,14 @@ async def get_tutor_text(
             {
                 "role": "user",
                 "content": (
-                    f"Данные алгоритмического анализа: {context}\n\n"
+                    f"Данные алгоритмического анализа: {clean_context}\n\n"
                     "Напиши совет ученику (3-4 предложения):\n"
                     "1. Конкретный риск с % вероятности\n"
                     "2. Корневая тема-проблема\n"
                     "3. Что изучить в первую очередь\n"
                     "4. Мотивация на основе сильных предметов\n"
-                    "НЕ придумывай цифры - используй только данные выше."
+                    "НЕ придумывай цифры - используй только данные выше. "
+                    "Используй risk_percent как единственный источник процента риска."
                 ),
             },
         ],

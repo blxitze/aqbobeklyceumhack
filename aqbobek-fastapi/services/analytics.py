@@ -115,7 +115,10 @@ def compute_risk(grades: list[dict], student_id: str) -> dict:
     if not grades:
         return {
             "studentId": student_id,
+            "riskScore": 0.0,
+            "riskPercent": 0,
             "riskLevel": "low",
+            "highestRiskSubject": "",
             "subjectRisks": [],
             "strengths": [],
             "weaknesses": [],
@@ -185,16 +188,20 @@ def compute_risk(grades: list[dict], student_id: str) -> dict:
         if final_pct is not None and final_pct < 40:
             weaknesses.append(subject)
 
-    overall_finals = [sr["finalPercent"] for sr in subject_risks if sr["finalPercent"] is not None]
-    overall_avg = np.mean(overall_finals) if overall_finals else 50.0
-    failing_count = sum(1 for f in overall_finals if f < 40)
+    subject_risks.sort(key=lambda x: x["failureProbability"], reverse=True)
+    highest_failure_probability = (
+        float(subject_risks[0]["failureProbability"]) if subject_risks else 0.0
+    )
+    risk_score = max(0.0, min(1.0, highest_failure_probability))
+    risk_percent = round(risk_score * 100)
 
-    if failing_count >= 2 or overall_avg < 40:
-        risk_level = "high"
-    elif failing_count >= 1 or overall_avg < 65:
+    # Risk-level thresholds are based on raw [0..1] risk score.
+    if risk_score < 0.35:
+        risk_level = "low"
+    elif risk_score < 0.65:
         risk_level = "medium"
     else:
-        risk_level = "low"
+        risk_level = "high"
 
     career_map = {
         "Математика": "IT, инженерия, финансы",
@@ -213,11 +220,12 @@ def compute_risk(grades: list[dict], student_id: str) -> dict:
                 f"рекомендуем: {hint}"
             )
 
-    subject_risks.sort(key=lambda x: x["riskScore"], reverse=True)
-
     return {
         "studentId": student_id,
+        "riskScore": round(risk_score, 3),
+        "riskPercent": risk_percent,
         "riskLevel": risk_level,
+        "highestRiskSubject": subject_risks[0]["subject"] if subject_risks else "",
         "subjectRisks": subject_risks,
         "strengths": strengths,
         "weaknesses": weaknesses,
