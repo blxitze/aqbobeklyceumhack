@@ -4,7 +4,12 @@ export type SubjectTrend = "improving" | "declining" | "stable";
 
 export type SubjectAverage = {
   subject: string;
-  average: number;
+  foPercent: number | null;
+  sorPercent: number | null;
+  socPercent: number | null;
+  finalPercent: number | null;
+  predictedGrade: 2 | 3 | 4 | 5 | null;
+  gradeLabel: "Отлично" | "Хорошо" | "Удовл." | "Неудовл." | "—";
   trend: SubjectTrend;
 };
 
@@ -13,7 +18,9 @@ export type TeacherStudent = {
   name: string;
   classId: string;
   className: string;
-  averageScore: number;
+  finalPercent: number | null;
+  socPercent: number | null;
+  predictedGrade: 2 | 3 | 4 | 5 | null;
   attendanceRate: number;
   subjectAverages: SubjectAverage[];
   riskLevel: RiskLevel;
@@ -30,10 +37,19 @@ export type TeacherClassWithStudents = {
 export type TeacherClassReportStats = {
   classId: string;
   className: string;
-  classAverage: number;
-  classAverageBySubject: Record<string, number>;
+  classFinalPercent: number | null;
+  classBySubject: Record<
+    string,
+    {
+      foPercent: number | null;
+      sorPercent: number | null;
+      socPercent: number | null;
+      finalPercent: number | null;
+      predictedGrade: 2 | 3 | 4 | 5 | null;
+    }
+  >;
   atRiskCount: number;
-  topStudents: Array<{ id: string; name: string; averageScore: number }>;
+  topStudents: Array<{ id: string; name: string; finalPercent: number | null; predictedGrade: 2 | 3 | 4 | 5 | null }>;
   mostMissedTopic: string;
   attendanceRate: number;
 };

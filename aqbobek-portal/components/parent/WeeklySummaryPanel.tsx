@@ -7,10 +7,17 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
 type WeeklySummaryStats = {
-  weeklyAverageBySubject: Record<string, number>;
+  subjectSummary: Array<{
+    subject: string;
+    finalPercent: number | null;
+    predictedGrade: 2 | 3 | 4 | 5 | null;
+    gradeLabel: string;
+    socPercent: number | null;
+    trend: "improving" | "declining" | "stable";
+  }>;
   missedLessons: number;
-  improvedSubjects: string[];
   worryingSubjects: string[];
+  goodSubjects: string[];
 };
 
 type WeeklySummaryResponse = {
@@ -23,6 +30,19 @@ type WeeklySummaryPanelProps = {
   childId: string;
   childName: string;
 };
+
+function normalizeSummaryResponse(input: WeeklySummaryResponse): WeeklySummaryResponse {
+  return {
+    ...input,
+    stats: {
+      ...input.stats,
+      subjectSummary: input.stats.subjectSummary ?? [],
+      worryingSubjects: input.stats.worryingSubjects ?? [],
+      goodSubjects: input.stats.goodSubjects ?? [],
+      missedLessons: input.stats.missedLessons ?? 0,
+    },
+  };
+}
 
 function formatDateTime(iso: string): string {
   return new Intl.DateTimeFormat("ru-RU", {
@@ -57,9 +77,9 @@ export default function WeeklySummaryPanel({ childId, childName }: WeeklySummary
         throw new Error(payload.error ?? "Не удалось получить сводку");
       }
 
-      setData(payload);
+      setData(normalizeSummaryResponse(payload));
       if (typeof window !== "undefined") {
-        sessionStorage.setItem(storageKey, JSON.stringify(payload));
+        sessionStorage.setItem(storageKey, JSON.stringify(normalizeSummaryResponse(payload)));
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Не удалось получить сводку");
@@ -74,17 +94,17 @@ export default function WeeklySummaryPanel({ childId, childName }: WeeklySummary
     if (!cached) return;
 
     try {
-      setData(JSON.parse(cached) as WeeklySummaryResponse);
+      setData(normalizeSummaryResponse(JSON.parse(cached) as WeeklySummaryResponse));
     } catch {
       sessionStorage.removeItem(storageKey);
     }
   }, [storageKey]);
 
   const bestSubject =
-    data
-      ? Object.entries(data.stats.weeklyAverageBySubject).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "Нет данных"
-      : "Нет данных";
-  const warningSubject = data?.stats.worryingSubjects[0] ?? "Нет";
+    data?.stats.goodSubjects?.[0] ??
+    data?.stats.subjectSummary?.find((subject) => subject.finalPercent !== null)?.subject ??
+    "Нет данных";
+  const warningSubject = data?.stats.worryingSubjects?.[0] ?? "Нет";
 
   return (
     <div className="space-y-4">

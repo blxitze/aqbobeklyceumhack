@@ -9,7 +9,7 @@ import type { StudentFromClassResponse } from "@/components/student/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireAuth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { riskLevelFromAverage, trendFromSubjectAverages } from "@/lib/teacher-analytics";
+import { trendFromSubjectAverages } from "@/lib/teacher-analytics";
 
 type ApiResult<T> = {
   data: T | null;
@@ -52,17 +52,31 @@ async function fetchClassStudents(
 
 function toTeacherStudent(student: StudentFromClassResponse): TeacherStudent {
   const weakestSubject =
-    [...student.subjectAverages].sort((a, b) => a.average - b.average)[0]?.subject ?? "";
+    [...student.subjectAverages].sort(
+      (a, b) => (a.finalPercent ?? -1) - (b.finalPercent ?? -1),
+    )[0]?.subject ?? "";
+
+  const riskLevel: TeacherStudent["riskLevel"] =
+    (student.finalPercent !== null && student.finalPercent < 40) ||
+    (student.socPercent !== null && student.socPercent < 40)
+      ? "high"
+      : student.finalPercent !== null && student.finalPercent < 65
+        ? "medium"
+        : student.finalPercent === null
+          ? "medium"
+          : "low";
 
   return {
     id: student.id,
     name: student.name,
     classId: student.classId,
     className: student.className,
-    averageScore: student.averageScore,
+    finalPercent: student.finalPercent,
+    socPercent: student.socPercent,
+    predictedGrade: student.predictedGrade,
     attendanceRate: student.attendanceRate,
     subjectAverages: student.subjectAverages,
-    riskLevel: riskLevelFromAverage(student.averageScore),
+    riskLevel,
     weakestSubject,
     trend: trendFromSubjectAverages(student.subjectAverages),
   };

@@ -8,10 +8,17 @@ type AtRiskStudent = {
   studentId: string;
   name: string;
   className: string;
-  averageScore: number;
-  riskScore: number;
-  weakestSubject: string;
+  finalPercent: number;
+  predictedGrade: 2 | 3 | 4 | 5 | null;
+  worstSubject: string;
+  worstSubjectPercent: number | null;
 };
+
+function rowClass(finalPercent: number): string {
+  if (finalPercent < 40) return "border-red-200 bg-red-50";
+  if (finalPercent < 65) return "border-amber-200 bg-amber-50";
+  return "border bg-card";
+}
 
 export default function AtRiskSummary() {
   const [rows, setRows] = useState<AtRiskStudent[]>([]);
@@ -43,9 +50,9 @@ export default function AtRiskSummary() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         title: `Риск по ученику ${student.name}`,
-        body: `Ученик ${student.name} (${student.className}) имеет риск ${Math.round(
-          student.riskScore,
-        )} и слабый предмет: ${student.weakestSubject}.`,
+        body: `Ученик ${student.name} (${student.className}) имеет итог ${student.finalPercent.toFixed(
+          1,
+        )}% и слабый предмет: ${student.worstSubject}.`,
         targetRole: "TEACHER",
       }),
     });
@@ -57,20 +64,24 @@ export default function AtRiskSummary() {
 
   return (
     <div className="space-y-3">
+      <p className="text-sm font-medium">В зоне риска: {rows.length} учеников</p>
       {rows.map((student) => (
-        <div key={student.studentId} className="rounded-lg border bg-card p-3">
+        <div key={student.studentId} className={`rounded-lg p-3 ${rowClass(student.finalPercent)}`}>
           <div className="flex items-start justify-between gap-2">
             <div>
               <p className="text-sm font-semibold">{student.name}</p>
               <p className="text-xs text-muted-foreground">
-                {student.className} • {student.averageScore.toFixed(1)} балла
+                {student.className} • {student.finalPercent.toFixed(1)}%
               </p>
             </div>
-            <span className="rounded-full bg-red-100 px-2 py-1 text-xs font-semibold text-red-700">
-              Риск {Math.round(student.riskScore)}
+            <span className="rounded-full bg-muted px-2 py-1 text-xs font-semibold">
+              Оценка {student.predictedGrade ?? "—"}
             </span>
           </div>
-          <p className="mt-1 text-xs text-muted-foreground">Слабый предмет: {student.weakestSubject}</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Слабый предмет: {student.worstSubject}{" "}
+            {student.worstSubjectPercent !== null ? `(${student.worstSubjectPercent.toFixed(1)}%)` : ""}
+          </p>
           <Button size="sm" variant="outline" className="mt-2" onClick={() => void notifyTeacher(student)}>
             Уведомить учителя
           </Button>

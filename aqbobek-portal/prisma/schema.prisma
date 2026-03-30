@@ -20,6 +20,12 @@ enum PortfolioItemType {
   OTHER
 }
 
+enum GradeType {
+  SOR
+  SOC
+  CURRENT
+}
+
 model User {
   id             String          @id @default(cuid())
   email          String          @unique
@@ -78,6 +84,8 @@ model Grade {
   subject    String
   topic      String
   score      Float
+  maxScore   Float          @default(10)
+  type       GradeType      @default(CURRENT)
   date       DateTime
   attendance Boolean
   student    StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)

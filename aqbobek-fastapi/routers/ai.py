@@ -50,11 +50,18 @@ def analyze_student(student_id: str, db=Depends(get_db)) -> AnalyzeResponse:
 def tutor_text(payload: TutorTextRequest) -> TutorTextResponse:
     api_key = os.getenv("OPENAI_API_KEY", "").strip()
     if not api_key:
+        subject = payload.analyzeResult.subjectRisks[0].subject if payload.analyzeResult.subjectRisks else "Математика"
+        fo = 72.0
+        sor = 64.0
+        soc = 58.0
+        final = round(fo * 0.25 + sor * 0.25 + soc * 0.5, 1)
+        grade = 4 if final >= 65 else 3 if final >= 40 else 2
         return TutorTextResponse(
             text=(
-                "Твой прогресс хороший, но по математике видна просадка. "
-                "Сфокусируйся на темах 'Квадратные уравнения' и 'Системы уравнений' "
-                "в ближайшие 7 дней, чтобы снизить риск и улучшить итог."
+                f"Твой итоговый процент по {subject}: {final}% "
+                f"(ФО: {fo}%, СОР: {sor}%, СОЧ: {soc}%). "
+                f"Прогнозируемая оценка: {grade}. "
+                "Сосредоточься на подготовке к СОЧ, потому что этот компонент имеет наибольший вес."
             )
         )
 

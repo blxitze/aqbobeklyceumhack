@@ -42,6 +42,8 @@ class Grade(Base):
     subject: Mapped[str] = mapped_column(String, nullable=False)
     topic: Mapped[str] = mapped_column(String, nullable=False)
     score: Mapped[float] = mapped_column(Float, nullable=False)
+    max_score: Mapped[float] = mapped_column(Float, nullable=False, default=10.0)
+    type: Mapped[str] = mapped_column(String, nullable=False)
     date: Mapped[DateTime] = mapped_column(DateTime, nullable=False)
     attendance: Mapped[bool] = mapped_column(Boolean, nullable=False)
     created_at: Mapped[DateTime] = mapped_column(DateTime, nullable=False)

@@ -127,9 +127,13 @@ export default function ReportsClient({ classes }: ReportsClientProps) {
               <div className="grid gap-3 sm:grid-cols-2">
                 <Card>
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-sm">Средний балл класса</CardTitle>
+                    <CardTitle className="text-sm">Итоговый % класса</CardTitle>
                   </CardHeader>
-                  <CardContent className="text-xl font-semibold">{reportData.stats.classAverage.toFixed(1)}</CardContent>
+                  <CardContent className="text-xl font-semibold">
+                    {reportData.stats.classFinalPercent !== null
+                      ? `${reportData.stats.classFinalPercent.toFixed(1)}%`
+                      : "—"}
+                  </CardContent>
                 </Card>
                 <Card>
                   <CardHeader className="pb-2">
@@ -153,13 +157,15 @@ export default function ReportsClient({ classes }: ReportsClientProps) {
 
               <Card>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm">Средние баллы по предметам</CardTitle>
+                  <CardTitle className="text-sm">Итоговые проценты по предметам</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-2 text-sm">
-                  {Object.entries(reportData.stats.classAverageBySubject).map(([subject, value]) => (
+                  {Object.entries(reportData.stats.classBySubject).map(([subject, value]) => (
                     <div key={subject} className="flex items-center justify-between">
                       <span>{subject}</span>
-                      <span className="font-semibold">{value.toFixed(1)}</span>
+                      <span className="font-semibold">
+                        {value.finalPercent !== null ? `${value.finalPercent.toFixed(1)}%` : "—"}
+                      </span>
                     </div>
                   ))}
                 </CardContent>

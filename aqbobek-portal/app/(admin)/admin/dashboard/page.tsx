@@ -3,12 +3,14 @@ import AtRiskSummary from "@/components/admin/AtRiskSummary";
 import CollapsibleSection from "@/components/shared/CollapsibleSection";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireAuth } from "@/lib/auth";
-import { average, attendanceRate } from "@/lib/admin-analytics";
+import { computeKazakhGrade } from "@/lib/bilimclass";
+import { attendanceRate, average } from "@/lib/admin-analytics";
 import { prisma } from "@/lib/prisma";
 
 function metricColor(value: number): string {
-  if (value > 75) return "text-emerald-600";
-  if (value > 60) return "text-amber-600";
+  if (value >= 85) return "text-emerald-600";
+  if (value >= 65) return "text-blue-600";
+  if (value >= 40) return "text-amber-600";
   return "text-red-600";
 }
 
@@ -33,8 +35,25 @@ export default async function AdminDashboard() {
       prisma.notification.findMany({ orderBy: { createdAt: "desc" }, take: 6 }),
     ]);
 
-  const averageScore = average(grades.map((grade) => grade.score));
-  const atRiskStudents = students.filter((student) => average(student.grades.map((g) => g.score)) < 60).length;
+  const schoolKazakh = computeKazakhGrade(grades);
+  const schoolFinalPercent = schoolKazakh.finalPercent;
+  const atRiskStudents = students.filter((student) => {
+    const bySubject = new Map<string, typeof student.grades>();
+    for (const grade of student.grades) {
+      const values = bySubject.get(grade.subject) ?? [];
+      values.push(grade);
+      bySubject.set(grade.subject, values);
+    }
+    const subjectFinalPercents = [...bySubject.values()]
+      .map((subjectGrades) => computeKazakhGrade(subjectGrades).finalPercent)
+      .filter((value): value is number => value !== null);
+
+    if (subjectFinalPercents.length === 0) return false;
+
+    const overallFinalPercent = average(subjectFinalPercents);
+    const hasCriticalSubject = subjectFinalPercents.some((percent) => percent < 40);
+    return hasCriticalSubject || overallFinalPercent < 50;
+  }).length;
   const schoolAttendanceRate = attendanceRate(grades);
 
   return (
@@ -58,9 +77,15 @@ export default async function AdminDashboard() {
           <CardContent><p className="text-2xl font-semibold">{classesCount}</p></CardContent>
         </Card>
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm">Средний балл по школе</CardTitle></CardHeader>
+          <CardHeader className="pb-2"><CardTitle className="text-sm">Итог % по школе (KZ)</CardTitle></CardHeader>
           <CardContent>
-            <p className={`text-2xl font-semibold ${metricColor(averageScore)}`}>{averageScore.toFixed(1)}</p>
+            <p
+              className={`text-2xl font-semibold ${
+                schoolFinalPercent !== null ? metricColor(schoolFinalPercent) : "text-muted-foreground"
+              }`}
+            >
+              {schoolFinalPercent !== null ? `${schoolFinalPercent.toFixed(1)}%` : "—"}
+            </p>
           </CardContent>
         </Card>
         <Card>

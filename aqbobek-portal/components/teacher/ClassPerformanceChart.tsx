@@ -35,7 +35,10 @@ export default function ClassPerformanceChart({ classes }: ClassPerformanceChart
 
     for (const classData of classes) {
       const values = classData.students
-        .map((student) => student.subjectAverages.find((item) => item.subject === subject)?.average ?? 0)
+        .map(
+          (student) =>
+            student.subjectAverages.find((item) => item.subject === subject)?.finalPercent ?? 0,
+        )
         .filter((score) => score > 0);
 
       row[classData.className] =
@@ -60,7 +63,7 @@ export default function ClassPerformanceChart({ classes }: ClassPerformanceChart
           label={{ value: "Порог", position: "insideTopRight", fill: "#6b7280", fontSize: 12 }}
         />
         <Tooltip
-          formatter={(value, name) => [`${Number(value ?? 0).toFixed(1)} балла`, String(name)]}
+          formatter={(value, name) => [`${Number(value ?? 0).toFixed(1)}%`, String(name)]}
         />
         <Legend />
         {classes.map((classData, index) => (

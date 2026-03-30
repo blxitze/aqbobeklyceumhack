@@ -14,7 +14,7 @@ type EarlyWarningSystemProps = {
   students: TeacherStudent[];
 };
 
-type SortKey = "name" | "averageScore" | "attendanceRate" | "trend" | "riskLevel" | "weakestSubject";
+type SortKey = "name" | "finalPercent" | "socPercent" | "attendanceRate" | "trend" | "riskLevel" | "weakestSubject";
 type SortDirection = "asc" | "desc";
 
 const SUBJECTS = ["Математика", "Физика", "Информатика", "История", "Биология"];
@@ -32,8 +32,15 @@ function riskClass(level: RiskLevel): string {
 }
 
 function scoreClass(score: number): string {
-  if (score < 60) return "text-red-600";
-  if (score < 75) return "text-amber-600";
+  if (score < 40) return "text-red-600";
+  if (score < 65) return "text-amber-600";
+  return "text-emerald-600";
+}
+
+function socClass(score: number): string {
+  if (score <= 0) return "text-muted-foreground";
+  if (score < 40) return "text-red-600";
+  if (score < 65) return "text-amber-600";
   return "text-emerald-600";
 }
 
@@ -83,7 +90,7 @@ export default function EarlyWarningSystem({ students }: EarlyWarningSystemProps
   const [classFilter, setClassFilter] = useState("all");
   const [riskFilter, setRiskFilter] = useState<"all" | RiskLevel>("all");
   const [subjectFilter, setSubjectFilter] = useState("all");
-  const [sortKey, setSortKey] = useState<SortKey>("averageScore");
+  const [sortKey, setSortKey] = useState<SortKey>("finalPercent");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
 
   const classOptions = useMemo(() => {
@@ -105,7 +112,8 @@ export default function EarlyWarningSystem({ students }: EarlyWarningSystemProps
         let compare = 0;
 
         if (sortKey === "name") compare = a.name.localeCompare(b.name, "ru");
-        if (sortKey === "averageScore") compare = a.averageScore - b.averageScore;
+        if (sortKey === "finalPercent") compare = (a.finalPercent ?? -1) - (b.finalPercent ?? -1);
+        if (sortKey === "socPercent") compare = (a.socPercent ?? -1) - (b.socPercent ?? -1);
         if (sortKey === "attendanceRate") compare = a.attendanceRate - b.attendanceRate;
         if (sortKey === "trend") compare = comparableTrendValue(a.trend) - comparableTrendValue(b.trend);
         if (sortKey === "riskLevel") compare = comparableRiskValue(a.riskLevel) - comparableRiskValue(b.riskLevel);
@@ -181,12 +189,15 @@ export default function EarlyWarningSystem({ students }: EarlyWarningSystemProps
             </TableHead>
             <TableHead>
               <SortHeader
-                label="Средний балл"
-                column="averageScore"
+                label="Итог%"
+                column="finalPercent"
                 sortKey={sortKey}
                 sortDirection={sortDirection}
                 onSort={onSort}
               />
+            </TableHead>
+            <TableHead>
+              <SortHeader label="СОЧ%" column="socPercent" sortKey={sortKey} sortDirection={sortDirection} onSort={onSort} />
             </TableHead>
             <TableHead>
               <SortHeader
@@ -232,8 +243,18 @@ export default function EarlyWarningSystem({ students }: EarlyWarningSystemProps
                     </span>
                   </div>
                 </TableCell>
-                <TableCell className={`font-semibold ${scoreClass(student.averageScore)}`}>
-                  {student.averageScore.toFixed(1)}
+                <TableCell className={`font-semibold ${scoreClass(student.finalPercent ?? 0)}`}>
+                  {student.finalPercent !== null ? `${student.finalPercent.toFixed(1)}%` : "—"}
+                </TableCell>
+                <TableCell className={`font-semibold ${socClass(student.socPercent ?? 0)}`}>
+                  <div className="flex items-center gap-1">
+                    <span>{student.socPercent !== null ? `${student.socPercent.toFixed(1)}%` : "—"}</span>
+                    {student.socPercent !== null && student.socPercent < 40 ? (
+                      <span aria-label="SOC warning" title="СОЧ ниже 40%">
+                        ⚠
+                      </span>
+                    ) : null}
+                  </div>
                 </TableCell>
                 <TableCell>
                   <div className="flex items-center gap-1">

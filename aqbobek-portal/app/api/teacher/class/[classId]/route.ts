@@ -1,8 +1,13 @@
 import { NextResponse } from "next/server";
 
 import { requireAuth } from "@/lib/auth";
+import { computeKazakhGrade } from "@/lib/bilimclass";
 import { prisma } from "@/lib/prisma";
-import { attendanceRate, averageScore, computeClassAverageBySubject } from "@/lib/teacher-analytics";
+import {
+  attendanceRate,
+  computeClassFinalPercentBySubject,
+  isStudentAtRiskByKazakh,
+} from "@/lib/teacher-analytics";
 
 export async function GET(
   _request: Request,
@@ -42,17 +47,29 @@ export async function GET(
       return NextResponse.json({ error: "Класс не найден" }, { status: 404 });
     }
 
-    const students = classData.students.map((student) => ({
-      id: student.id,
-      name: student.user.name,
-      averageScore: averageScore(student.grades.map((grade) => ({ score: grade.score }))),
-      attendanceRate: attendanceRate(student.grades.map((grade) => ({ attendance: grade.attendance }))),
-    }));
+    const students = classData.students.map((student) => {
+      const kz = computeKazakhGrade(student.grades);
+      return {
+        id: student.id,
+        name: student.user.name,
+        finalPercent: kz.finalPercent,
+        predictedGrade: kz.predictedGrade,
+        attendanceRate: attendanceRate(student.grades.map((grade) => ({ attendance: grade.attendance }))),
+      };
+    });
 
     const allGrades = classData.students.flatMap((student) => student.grades);
-    const averageBySubject = computeClassAverageBySubject(allGrades);
-    const topStudents = [...students].sort((a, b) => b.averageScore - a.averageScore).slice(0, 3);
-    const atRiskStudents = students.filter((student) => student.averageScore < 60);
+    const finalPercentBySubject = computeClassFinalPercentBySubject(allGrades);
+
+    const topStudents = [...students]
+      .filter((student) => student.finalPercent !== null)
+      .sort((a, b) => (b.finalPercent ?? 0) - (a.finalPercent ?? 0))
+      .slice(0, 3);
+
+    const atRiskStudents = students.filter((student) => {
+      const full = classData.students.find((s) => s.id === student.id);
+      return full ? isStudentAtRiskByKazakh(full.grades) : false;
+    });
 
     return NextResponse.json({
       class: {
@@ -61,7 +78,7 @@ export async function GET(
         grade: classData.grade,
       },
       students,
-      averageBySubject,
+      finalPercentBySubject,
       topStudents,
       atRiskStudents,
     });

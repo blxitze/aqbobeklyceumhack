@@ -3,6 +3,7 @@ import type { Grade } from "@prisma/client";
 
 import { auth } from "@/auth";
 import {
+  computeKazakhGrade,
   computeAttendanceRate,
   computeRiskScore,
   computeTrend,
@@ -14,10 +15,13 @@ const BILIMCLASS_HEADERS = {
   "X-BilimClass-School": "Aqbobek Lyceum",
 };
 
-function averageScore(grades: Grade[]): number {
-  if (grades.length === 0) return 0;
-  const avg = grades.reduce((sum, grade) => sum + grade.score, 0) / grades.length;
-  return Number(avg.toFixed(1));
+function effectiveSubjectPercent(kazakh: {
+  finalPercent: number | null;
+  socPercent: number | null;
+  sorPercent: number | null;
+  foPercent: number | null;
+}): number | null {
+  return kazakh.finalPercent ?? kazakh.socPercent ?? kazakh.sorPercent ?? kazakh.foPercent;
 }
 
 export async function GET(request: NextRequest) {
@@ -56,32 +60,58 @@ export async function GET(request: NextRequest) {
       subjectMap.set(grade.subject, bySubject);
     }
 
-    const subjectRisks = Array.from(subjectMap.entries()).map(([subject, subjectGrades]) => ({
-      subject,
-      averageScore: averageScore(subjectGrades),
-      trend: computeTrend(subjectGrades),
-      missedTopics: Array.from(
-        new Set(subjectGrades.filter((grade) => grade.score < 50).map((grade) => grade.topic)),
-      ),
-      riskScore: computeRiskScore(subjectGrades),
-    }));
+    const subjectRisks = Array.from(subjectMap.entries()).map(([subject, subjectGrades]) => {
+      const kazakh = computeKazakhGrade(subjectGrades);
+      return {
+        subject,
+        foPercent: kazakh.foPercent,
+        sorPercent: kazakh.sorPercent,
+        socPercent: kazakh.socPercent,
+        finalPercent: kazakh.finalPercent,
+        predictedGrade: kazakh.predictedGrade,
+        gradeLabel: kazakh.gradeLabel,
+        trend: computeTrend(subjectGrades),
+        missedTopics: Array.from(
+          new Set(subjectGrades.filter((grade) => (grade.score / grade.maxScore) * 100 < 40).map((grade) => grade.topic)),
+        ),
+        riskScore: computeRiskScore(subjectGrades),
+      };
+    });
 
-    const overallAverage = averageScore(grades);
+    const overallKazakh = computeKazakhGrade(grades);
     const strengths = subjectRisks
-      .filter((subjectRisk) => subjectRisk.averageScore > 80)
+      .filter((subjectRisk) => {
+        const p = effectiveSubjectPercent(subjectRisk);
+        return p !== null && p >= 85;
+      })
       .map((subjectRisk) => subjectRisk.subject);
     const weaknesses = subjectRisks
-      .filter((subjectRisk) => subjectRisk.averageScore < 60)
+      .filter((subjectRisk) => {
+        const p = effectiveSubjectPercent(subjectRisk);
+        return p !== null && p < 65;
+      })
       .map((subjectRisk) => subjectRisk.subject);
     const attendanceRate = computeAttendanceRate(grades);
 
     const riskLevel: "low" | "medium" | "high" =
-      overallAverage < 55 ? "high" : overallAverage < 70 ? "medium" : "low";
+      (overallKazakh.finalPercent !== null && overallKazakh.finalPercent < 40) ||
+      (overallKazakh.socPercent !== null && overallKazakh.socPercent < 40)
+        ? "high"
+        : overallKazakh.finalPercent !== null && overallKazakh.finalPercent < 65
+          ? "medium"
+          : overallKazakh.finalPercent === null
+            ? "medium"
+            : "low";
 
     return NextResponse.json(
       {
         studentId,
         riskLevel,
+        foPercent: overallKazakh.foPercent,
+        sorPercent: overallKazakh.sorPercent,
+        socPercent: overallKazakh.socPercent,
+        finalPercent: overallKazakh.finalPercent,
+        predictedGrade: overallKazakh.predictedGrade,
         subjectRisks,
         strengths,
         weaknesses,

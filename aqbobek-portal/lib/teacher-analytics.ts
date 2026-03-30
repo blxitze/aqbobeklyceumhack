@@ -1,12 +1,7 @@
 import type { Grade } from "@prisma/client";
 
-import type { RiskLevel, SubjectTrend } from "@/components/teacher/types";
-
-export function averageScore(grades: Array<{ score: number }>): number {
-  if (grades.length === 0) return 0;
-  const avg = grades.reduce((sum, grade) => sum + grade.score, 0) / grades.length;
-  return Number(avg.toFixed(1));
-}
+import type { SubjectTrend } from "@/components/teacher/types";
+import { computeKazakhGrade } from "@/lib/bilimclass";
 
 export function attendanceRate(grades: Array<{ attendance: boolean }>): number {
   if (grades.length === 0) return 0;
@@ -14,14 +9,8 @@ export function attendanceRate(grades: Array<{ attendance: boolean }>): number {
   return Number(((attended / grades.length) * 100).toFixed(1));
 }
 
-export function riskLevelFromAverage(score: number): RiskLevel {
-  if (score < 60) return "high";
-  if (score < 75) return "medium";
-  return "low";
-}
-
 export function trendFromSubjectAverages(
-  subjectAverages: Array<{ trend: SubjectTrend; average: number }>,
+  subjectAverages: Array<{ trend: SubjectTrend }>,
 ): SubjectTrend {
   const declining = subjectAverages.filter((item) => item.trend === "declining").length;
   const improving = subjectAverages.filter((item) => item.trend === "improving").length;
@@ -31,19 +20,38 @@ export function trendFromSubjectAverages(
   return "stable";
 }
 
-export function computeClassAverageBySubject(grades: Grade[]): Record<string, number> {
-  const bySubject = new Map<string, number[]>();
+/** Per-subject finalPercent from Kazakh formula (null if FO/SOR/SOC incomplete). */
+export function computeClassFinalPercentBySubject(grades: Grade[]): Record<string, number | null> {
+  const bySubject = new Map<string, Grade[]>();
 
   for (const grade of grades) {
     const values = bySubject.get(grade.subject) ?? [];
-    values.push(grade.score);
+    values.push(grade);
     bySubject.set(grade.subject, values);
   }
 
-  const result: Record<string, number> = {};
-  for (const [subject, scores] of bySubject.entries()) {
-    result[subject] = averageScore(scores.map((score) => ({ score })));
+  const result: Record<string, number | null> = {};
+  for (const [subject, subjectGrades] of bySubject.entries()) {
+    result[subject] = computeKazakhGrade(subjectGrades).finalPercent;
   }
 
   return result;
+}
+
+export function isStudentAtRiskByKazakh(grades: Grade[]): boolean {
+  if (grades.length === 0) return false;
+  const overall = computeKazakhGrade(grades);
+  if (overall.finalPercent !== null && overall.finalPercent < 50) return true;
+
+  const bySubject = new Map<string, Grade[]>();
+  for (const grade of grades) {
+    const list = bySubject.get(grade.subject) ?? [];
+    list.push(grade);
+    bySubject.set(grade.subject, list);
+  }
+  for (const subjectGrades of bySubject.values()) {
+    const kz = computeKazakhGrade(subjectGrades);
+    if (kz.finalPercent !== null && kz.finalPercent < 40) return true;
+  }
+  return false;
 }

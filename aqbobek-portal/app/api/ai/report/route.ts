@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
+import type { Grade } from "@prisma/client";
 
 import { requireAuth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { attendanceRate, averageScore, computeClassAverageBySubject } from "@/lib/teacher-analytics";
+import { computeKazakhGrade } from "@/lib/bilimclass";
+import { attendanceRate } from "@/lib/teacher-analytics";
 import type { TeacherClassReportStats } from "@/components/teacher/types";
 
 type ReportRequest = {
@@ -10,9 +12,9 @@ type ReportRequest = {
 };
 
 function buildMockReport(stats: TeacherClassReportStats): string {
-  return `Отчёт по классу ${stats.className}: средний балл ${stats.classAverage.toFixed(
-    1,
-  )}. ${stats.atRiskCount} учеников в зоне риска. Рекомендуется обратить внимание на тему ${stats.mostMissedTopic}.`;
+  const finalLabel =
+    stats.classFinalPercent === null ? "—" : `${stats.classFinalPercent.toFixed(1)}%`;
+  return `Отчёт по классу ${stats.className}: итоговый процент ${finalLabel}. ${stats.atRiskCount} учеников в зоне риска. Рекомендуется обратить внимание на тему ${stats.mostMissedTopic}.`;
 }
 
 async function generateOpenAiReport(stats: TeacherClassReportStats): Promise<string> {
@@ -37,9 +39,11 @@ async function generateOpenAiReport(stats: TeacherClassReportStats): Promise<str
         },
         {
           role: "user",
-          content: `Сгенерируй отчёт об успеваемости класса на основе данных: ${JSON.stringify(
-            stats,
-          )}. Формат: 3 абзаца — общая картина, зона риска, рекомендации.`,
+          content: `Сгенерируй отчёт об успеваемости класса на основе данных: ${JSON.stringify(stats)}.
+Итоговый % = ФО(25%) + СОР(25%) + СОЧ(50%).
+Особое внимание обрати на результаты СОЧ (суммативное оценивание за четверть) — они имеют наибольший вес.
+Не изменяй числовые значения из JSON.
+Формат: 3 абзаца — общая картина, зона риска, рекомендации.`,
         },
       ],
       temperature: 0.4,
@@ -55,6 +59,29 @@ async function generateOpenAiReport(stats: TeacherClassReportStats): Promise<str
   };
 
   return payload.choices?.[0]?.message?.content?.trim() || buildMockReport(stats);
+}
+
+function computeKazakhBySubject(grades: Grade[]): TeacherClassReportStats["classBySubject"] {
+  const bySubject = new Map<string, Grade[]>();
+  for (const grade of grades) {
+    const values = bySubject.get(grade.subject) ?? [];
+    values.push(grade);
+    bySubject.set(grade.subject, values);
+  }
+
+  const result: TeacherClassReportStats["classBySubject"] = {};
+  for (const [subject, values] of bySubject.entries()) {
+    const metrics = computeKazakhGrade(values);
+    result[subject] = {
+      foPercent: metrics.foPercent,
+      sorPercent: metrics.sorPercent,
+      socPercent: metrics.socPercent,
+      finalPercent: metrics.finalPercent,
+      predictedGrade: metrics.predictedGrade,
+    };
+  }
+
+  return result;
 }
 
 export async function POST(request: Request) {
@@ -98,29 +125,36 @@ export async function POST(request: Request) {
     }
 
     const allGrades = classData.students.flatMap((student) => student.grades);
-    const classAverageBySubject = computeClassAverageBySubject(allGrades);
-    const classAverage = averageScore(allGrades.map((grade) => ({ score: grade.score })));
+    const classBySubject = computeKazakhBySubject(allGrades);
+    const classFinalPercent = computeKazakhGrade(allGrades).finalPercent;
 
-    const studentsWithAverage = classData.students.map((student) => ({
-      id: student.id,
-      name: student.user.name,
-      average: averageScore(student.grades.map((grade) => ({ score: grade.score }))),
-    }));
+    const studentsWithPercent = classData.students.map((student) => {
+      const metrics = computeKazakhGrade(student.grades);
+      return {
+        id: student.id,
+        name: student.user.name,
+        finalPercent: metrics.finalPercent,
+        predictedGrade: metrics.predictedGrade,
+      };
+    });
 
-    const atRiskCount = studentsWithAverage.filter((student) => student.average < 60).length;
-    const topStudents = studentsWithAverage
-      .filter((student) => student.average > 85)
-      .sort((a, b) => b.average - a.average)
+    const atRiskCount = studentsWithPercent.filter(
+      (student) => student.finalPercent !== null && student.finalPercent < 40,
+    ).length;
+    const topStudents = studentsWithPercent
+      .filter((student) => student.finalPercent !== null)
+      .sort((a, b) => (b.finalPercent ?? 0) - (a.finalPercent ?? 0))
       .slice(0, 5)
       .map((student) => ({
         id: student.id,
         name: student.name,
-        averageScore: student.average,
+        finalPercent: student.finalPercent,
+        predictedGrade: student.predictedGrade,
       }));
 
     const missedTopicCount = new Map<string, number>();
     for (const grade of allGrades) {
-      if (grade.score < 50) {
+      if ((grade.score / grade.maxScore) * 100 < 40) {
         missedTopicCount.set(grade.topic, (missedTopicCount.get(grade.topic) ?? 0) + 1);
       }
     }
@@ -130,8 +164,8 @@ export async function POST(request: Request) {
     const stats: TeacherClassReportStats = {
       classId: classData.id,
       className: classData.name,
-      classAverage,
-      classAverageBySubject,
+      classFinalPercent,
+      classBySubject,
       atRiskCount,
       topStudents,
       mostMissedTopic,

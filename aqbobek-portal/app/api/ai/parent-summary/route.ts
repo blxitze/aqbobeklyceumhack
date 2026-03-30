@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { requireAuth } from "@/lib/auth";
-import { computeTrend } from "@/lib/bilimclass";
+import { computeKazakhGrade, computeTrend } from "@/lib/bilimclass";
 import { prisma } from "@/lib/prisma";
 
 type ParentSummaryRequest = {
@@ -9,23 +9,30 @@ type ParentSummaryRequest = {
 };
 
 type WeeklyStats = {
-  weeklyAverageBySubject: Record<string, number>;
+  subjectSummary: Array<{
+    subject: string;
+    finalPercent: number | null;
+    predictedGrade: 2 | 3 | 4 | 5 | null;
+    gradeLabel: string;
+    socPercent: number | null;
+    trend: "improving" | "declining" | "stable";
+  }>;
   missedLessons: number;
-  improvedSubjects: string[];
   worryingSubjects: string[];
+  goodSubjects: string[];
 };
 
-function average(scores: number[]): number {
-  if (scores.length === 0) return 0;
-  return Number((scores.reduce((sum, score) => sum + score, 0) / scores.length).toFixed(1));
-}
-
 function buildMockSummary(studentName: string, stats: WeeklyStats): string {
-  const overallAverage = average(Object.values(stats.weeklyAverageBySubject));
-  const mainSubject = stats.worryingSubjects[0] ?? "ключевые темы";
-  return `За прошедшую неделю ${studentName} показал(а) средний балл ${overallAverage.toFixed(
-    1,
-  )}. Обратите внимание на ${mainSubject}. Рекомендуем обсудить расписание подготовки.`;
+  const gradeSummary = stats.subjectSummary
+    .map((entry) => `${entry.subject}: ${entry.gradeLabel}`)
+    .join(", ");
+
+  const warningPart =
+    stats.worryingSubjects.length > 0
+      ? `Рекомендуем обратить внимание на: ${stats.worryingSubjects.join(", ")}.`
+      : "Успеваемость в норме по всем предметам.";
+
+  return `За период обучения ${studentName} имеет следующие прогнозируемые оценки: ${gradeSummary || "недостаточно данных"}. ${warningPart}`;
 }
 
 async function generateWithOpenAi(studentName: string, stats: WeeklyStats): Promise<string> {
@@ -50,7 +57,7 @@ async function generateWithOpenAi(studentName: string, stats: WeeklyStats): Prom
         },
         {
           role: "user",
-          content: `Напиши недельную сводку об успеваемости ребёнка ${studentName} на основе данных: ${JSON.stringify(
+          content: `Напиши недельную сводку об успеваемости ребёнка ${studentName} на основе данных (не изменяй числовые значения): ${JSON.stringify(
             stats,
           )}. Формат: 2-3 предложения — что хорошо, что требует внимания, один конкретный совет родителю.`,
         },
@@ -99,7 +106,7 @@ export async function POST(request: Request) {
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
-    const grades = await prisma.grade.findMany({
+    const gradesLastWeek = await prisma.grade.findMany({
       where: {
         studentId,
         date: { gte: sevenDaysAgo },
@@ -107,31 +114,44 @@ export async function POST(request: Request) {
       orderBy: { date: "asc" },
     });
 
-    const bySubject = new Map<string, typeof grades>();
-    for (const grade of grades) {
+    const allGrades = await prisma.grade.findMany({
+      where: { studentId },
+      orderBy: { date: "asc" },
+    });
+
+    const subjectsInLastWeek = new Set(gradesLastWeek.map((grade) => grade.subject));
+    const bySubject = new Map<string, typeof allGrades>();
+    for (const grade of allGrades) {
+      if (!subjectsInLastWeek.has(grade.subject)) continue;
       const list = bySubject.get(grade.subject) ?? [];
       list.push(grade);
       bySubject.set(grade.subject, list);
     }
 
-    const weeklyAverageBySubject: Record<string, number> = {};
-    const improvedSubjects: string[] = [];
-    const worryingSubjects: string[] = [];
+    const subjectResults = [...bySubject.entries()].map(([subject, subjectGrades]) => {
+      const computed = computeKazakhGrade(subjectGrades);
+      return {
+        subject,
+        finalPercent: computed.finalPercent,
+        predictedGrade: computed.predictedGrade,
+        gradeLabel: computed.gradeLabel,
+        socPercent: computed.socPercent,
+        trend: computeTrend(subjectGrades),
+      };
+    });
 
-    for (const [subject, subjectGrades] of bySubject.entries()) {
-      weeklyAverageBySubject[subject] = average(subjectGrades.map((grade) => grade.score));
-      const trend = computeTrend(subjectGrades);
-      if (trend === "improving") improvedSubjects.push(subject);
-      if (trend === "declining" || weeklyAverageBySubject[subject] < 60) {
-        worryingSubjects.push(subject);
-      }
-    }
+    const worryingSubjects = subjectResults
+      .filter((subjectResult) => subjectResult.finalPercent !== null && subjectResult.finalPercent < 65)
+      .map((subjectResult) => subjectResult.subject);
+    const goodSubjects = subjectResults
+      .filter((subjectResult) => subjectResult.finalPercent !== null && subjectResult.finalPercent >= 65)
+      .map((subjectResult) => subjectResult.subject);
 
     const stats: WeeklyStats = {
-      weeklyAverageBySubject,
-      missedLessons: grades.filter((grade) => !grade.attendance).length,
-      improvedSubjects,
+      subjectSummary: subjectResults,
+      missedLessons: gradesLastWeek.filter((grade) => !grade.attendance).length,
       worryingSubjects,
+      goodSubjects,
     };
 
     let summary = "";

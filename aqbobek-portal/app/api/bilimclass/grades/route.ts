@@ -3,7 +3,11 @@ import type { Prisma } from "@prisma/client";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { computeAttendanceRate, computeLetterGrade } from "@/lib/bilimclass";
+import {
+  computeAttendanceRate,
+  computeKazakhGrade,
+  gradeTypeLabel,
+} from "@/lib/bilimclass";
 
 const BILIMCLASS_HEADERS = {
   "X-BilimClass-Version": "2.1.0",
@@ -17,11 +21,6 @@ function toDate(value: string | null): Date | null {
     return null;
   }
   return date;
-}
-
-function average(values: number[]): number {
-  if (values.length === 0) return 0;
-  return Number((values.reduce((sum, value) => sum + value, 0) / values.length).toFixed(1));
 }
 
 export async function GET(request: NextRequest) {
@@ -91,17 +90,19 @@ export async function GET(request: NextRequest) {
       subject: grade.subject,
       topic: grade.topic,
       score: grade.score,
-      maxScore: 100,
-      percentage: Number(((grade.score / 100) * 100).toFixed(1)),
+      type: grade.type,
+      typeLabel: gradeTypeLabel(grade.type),
+      maxScore: grade.maxScore,
+      percent: Number(((grade.score / grade.maxScore) * 100).toFixed(1)),
+      percentage: Number(((grade.score / grade.maxScore) * 100).toFixed(1)),
       date: grade.date.toISOString(),
       attendance: grade.attendance,
-      letterGrade: computeLetterGrade(grade.score),
     }));
 
-    const perSubject = new Map<string, number[]>();
+    const perSubject = new Map<string, typeof grades>();
     for (const grade of grades) {
       const values = perSubject.get(grade.subject) ?? [];
-      values.push(grade.score);
+      values.push(grade);
       perSubject.set(grade.subject, values);
     }
 
@@ -110,24 +111,37 @@ export async function GET(request: NextRequest) {
     let bestAverage = -1;
     let weakestAverage = Number.POSITIVE_INFINITY;
 
-    for (const [subjectName, scores] of perSubject.entries()) {
-      const subjectAverage = average(scores);
-      if (subjectAverage > bestAverage) {
-        bestAverage = subjectAverage;
+    for (const [subjectName, subjectGrades] of perSubject.entries()) {
+      const subjectKz = computeKazakhGrade(subjectGrades);
+      const subjectPercent =
+        subjectKz.finalPercent ??
+        subjectKz.socPercent ??
+        subjectKz.sorPercent ??
+        subjectKz.foPercent ??
+        0;
+
+      if (subjectPercent > bestAverage) {
+        bestAverage = subjectPercent;
         bestSubject = subjectName;
       }
-      if (subjectAverage < weakestAverage) {
-        weakestAverage = subjectAverage;
+      if (subjectPercent < weakestAverage) {
+        weakestAverage = subjectPercent;
         weakestSubject = subjectName;
       }
     }
 
+    const kazakhSummary = computeKazakhGrade(grades);
     const summary = {
       totalGrades: grades.length,
-      averageScore: average(grades.map((grade) => grade.score)),
       attendanceRate: computeAttendanceRate(grades),
       bestSubject,
       weakestSubject,
+      foPercent: kazakhSummary.foPercent,
+      sorPercent: kazakhSummary.sorPercent,
+      socPercent: kazakhSummary.socPercent,
+      finalPercent: kazakhSummary.finalPercent,
+      predictedGrade: kazakhSummary.predictedGrade,
+      gradeLabel: kazakhSummary.gradeLabel,
     };
 
     return NextResponse.json(
@@ -135,6 +149,8 @@ export async function GET(request: NextRequest) {
         studentId,
         studentName: student.user.name,
         grades: gradesPayload,
+        socGrades: gradesPayload.filter((grade) => grade.type === "SOC"),
+        sorGrades: gradesPayload.filter((grade) => grade.type === "SOR"),
         summary,
       },
       { headers: BILIMCLASS_HEADERS },

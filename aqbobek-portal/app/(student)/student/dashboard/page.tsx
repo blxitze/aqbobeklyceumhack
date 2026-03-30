@@ -27,8 +27,9 @@ type DashboardApiData = {
 };
 
 function metricColor(value: number): string {
-  if (value > 75) return "text-emerald-600";
-  if (value > 60) return "text-amber-600";
+  if (value >= 85) return "text-emerald-600";
+  if (value >= 65) return "text-blue-600";
+  if (value >= 40) return "text-amber-600";
   return "text-red-600";
 }
 
@@ -141,11 +142,17 @@ async function DashboardContent() {
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium">Средний балл</CardTitle>
+              <CardTitle className="text-sm font-medium">Итоговый процент</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className={`text-2xl font-semibold ${metricColor(grades.data.summary.averageScore)}`}>
-                {grades.data.summary.averageScore.toFixed(1)}
+              <p
+                className={`text-2xl font-semibold ${metricColor(
+                  grades.data.summary.finalPercent ?? 0,
+                )}`}
+              >
+                {grades.data.summary.finalPercent !== null
+                  ? `${grades.data.summary.finalPercent.toFixed(1)}%`
+                  : "—"}
               </p>
             </CardContent>
           </Card>
@@ -189,7 +196,10 @@ async function DashboardContent() {
             <CardTitle className="text-lg">Динамика оценок</CardTitle>
           </CardHeader>
           <CardContent>
-            <GradesChart grades={grades.data?.grades ?? []} />
+            <GradesChart
+              grades={grades.data?.grades ?? []}
+              subjectSummaries={analytics.data?.subjectRisks ?? []}
+            />
           </CardContent>
         </Card>
         <Card className="lg:col-span-2">

@@ -3,18 +3,16 @@ import type { Grade } from "@prisma/client";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { computeAttendanceRate, computeTrend } from "@/lib/bilimclass";
+import {
+  computeAttendanceRate,
+  computeKazakhGrade,
+  computeTrend,
+} from "@/lib/bilimclass";
 
 const BILIMCLASS_HEADERS = {
   "X-BilimClass-Version": "2.1.0",
   "X-BilimClass-School": "Aqbobek Lyceum",
 };
-
-function averageScore(grades: Grade[]): number {
-  if (grades.length === 0) return 0;
-  const average = grades.reduce((sum, grade) => sum + grade.score, 0) / grades.length;
-  return Number(average.toFixed(1));
-}
 
 export async function GET(request: NextRequest) {
   try {
@@ -69,17 +67,23 @@ export async function GET(request: NextRequest) {
       }
 
       const subjectAverages = Array.from(subjectMap.entries()).map(([subject, grades]) => ({
+        ...computeKazakhGrade(grades),
         subject,
-        average: averageScore(grades),
         trend: computeTrend(grades),
       }));
+
+      const overall = computeKazakhGrade(student.grades);
 
       return {
         id: student.id,
         name: student.user.name,
         classId: student.classId,
         className: student.class.name,
-        averageScore: averageScore(student.grades),
+        foPercent: overall.foPercent,
+        sorPercent: overall.sorPercent,
+        socPercent: overall.socPercent,
+        finalPercent: overall.finalPercent,
+        predictedGrade: overall.predictedGrade,
         attendanceRate: computeAttendanceRate(student.grades),
         subjectAverages,
       };
