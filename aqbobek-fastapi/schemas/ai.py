@@ -32,8 +32,10 @@ class AnalyzeResponse(BaseModel):
 
 
 class TutorTextRequest(BaseModel):
-    studentId: str
-    analyzeResult: AnalyzeResponse
+    student_id: str
+    subject_risks: list[dict]
+    root_topic: str
+    learning_path: list[str]
 
 
 class TutorTextResponse(BaseModel):
