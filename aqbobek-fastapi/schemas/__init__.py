@@ -1,5 +1,4 @@
 from .ai import (
-    AnalyzeRequest,
     AnalyzeResponse,
     SubjectRisk,
     TutorTextRequest,
@@ -14,7 +13,6 @@ from .schedule import (
 )
 
 __all__ = [
-    "AnalyzeRequest",
     "SubjectRisk",
     "AnalyzeResponse",
     "TutorTextRequest",

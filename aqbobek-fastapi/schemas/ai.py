@@ -1,16 +1,19 @@
 from pydantic import BaseModel
-
-
-class AnalyzeRequest(BaseModel):
-    studentId: str
+from typing import Optional
 
 
 class SubjectRisk(BaseModel):
     subject: str
-    averageScore: float
-    trend: str
-    missedTopics: list[str]
-    riskScore: float
+    foPercent: Optional[float] = None
+    sorPercent: Optional[float] = None
+    socPercent: Optional[float] = None
+    finalPercent: Optional[float] = None
+    predictedGrade: Optional[int] = None
+    trend: str = "stable"
+    missedTopics: list[str] = []
+    riskScore: float = 0.0
+    failureProbability: float = 0.0
+    confidence: str = "medium"
 
 
 class AnalyzeResponse(BaseModel):
@@ -20,7 +23,9 @@ class AnalyzeResponse(BaseModel):
     strengths: list[str]
     weaknesses: list[str]
     careerHint: str
-    attendanceWarning: str
+    attendanceWarning: bool
+    rootProblem: str = ""
+    studyPath: list[str] = []
 
 
 class TutorTextRequest(BaseModel):
