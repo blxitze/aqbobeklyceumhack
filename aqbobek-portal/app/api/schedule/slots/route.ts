@@ -13,33 +13,52 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const classId = searchParams.get("classId");
   const date = searchParams.get("date");
+  const dowParam = searchParams.get("dayOfWeek");
 
-  if (!classId || !date) {
+  let dayOfWeek: number | null = null;
+  if (dowParam != null && dowParam !== "") {
+    const n = parseInt(dowParam, 10);
+    if (!Number.isNaN(n) && n >= 1 && n <= 7) {
+      dayOfWeek = n > 5 ? null : n;
+    }
+  }
+  if (dayOfWeek == null && date) {
+    const d = dateToIsoWeekday(date);
+    dayOfWeek = d > 5 ? null : d;
+  }
+
+  if (!classId || dayOfWeek == null) {
     return NextResponse.json({ slots: [] });
   }
 
-  const dayOfWeek = dateToIsoWeekday(date);
+  try {
+    const slots = await prisma.scheduleSlot.findMany({
+      where: {
+        classId,
+        dayOfWeek,
+        isActive: true,
+      },
+      include: { class: true },
+      orderBy: { timeSlot: "asc" },
+    });
 
-  const slots = await prisma.scheduleSlot.findMany({
-    where: {
-      classId,
-      dayOfWeek,
-      isActive: true,
-    },
-    include: { class: true },
-    orderBy: { timeSlot: "asc" },
-  });
-
-  return NextResponse.json({
-    slots: slots.map((s: typeof slots[number]) => ({
-      id: s.id,
-      classId: s.classId,
-      className: s.class?.name ?? "",
-      subject: s.subject,
-      teacherId: s.teacherId ?? "",
-      room: s.room,
-      dayOfWeek: s.dayOfWeek,
-      timeSlot: s.timeSlot,
-    })),
-  });
+    return NextResponse.json({
+      slots: slots.map((s: typeof slots[number]) => ({
+        id: s.id,
+        classId: s.classId,
+        className: s.class?.name ?? "",
+        subject: s.subject,
+        teacherId: s.teacherId ?? "",
+        room: s.room,
+        dayOfWeek: s.dayOfWeek,
+        timeSlot: s.timeSlot,
+      })),
+    });
+  } catch (error) {
+    console.error("schedule/slots error:", error);
+    return NextResponse.json(
+      { error: "Failed to fetch schedule slots" },
+      { status: 500 },
+    );
+  }
 }

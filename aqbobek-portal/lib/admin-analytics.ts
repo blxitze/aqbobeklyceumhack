@@ -5,7 +5,7 @@ export function average(scores: number[]): number {
   return Number((scores.reduce((sum, score) => sum + score, 0) / scores.length).toFixed(1));
 }
 
-export function attendanceRate(grades: Grade[]): number {
+export function classAttendanceRate(grades: Grade[]): number {
   if (grades.length === 0) return 0;
   const attended = grades.filter((grade) => grade.attendance).length;
   return Number(((attended / grades.length) * 100).toFixed(1));

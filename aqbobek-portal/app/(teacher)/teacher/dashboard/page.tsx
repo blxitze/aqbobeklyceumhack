@@ -1,5 +1,6 @@
 import { AlertTriangle } from "lucide-react";
 import { headers } from "next/headers";
+import Link from "next/link";
 
 import ClassPerformanceChart from "@/components/teacher/ClassPerformanceChart";
 import EarlyWarningSystem from "@/components/teacher/EarlyWarningSystem";
@@ -133,11 +134,23 @@ export default async function TeacherDashboardPage() {
     orderBy: [{ dayOfWeek: "asc" }, { timeSlot: "asc" }],
   });
 
-  const uniqueClassIds = [...new Set(allTeacherSlots.map((slot) => slot.classId))];
-  const classNameById = new Map<string, string>();
-  for (const slot of allTeacherSlots) {
-    classNameById.set(slot.classId, slot.class.name);
-  }
+  const teacherClasses = await prisma.scheduleSlot.findMany({
+    where: { teacherId: teacherProfile.id, isActive: true },
+    include: {
+      class: {
+        include: {
+          _count: {
+            select: { students: true },
+          },
+        },
+      },
+    },
+    distinct: ["classId"],
+    orderBy: [{ classId: "asc" }],
+  });
+  const uniqueClasses = teacherClasses.map((slot) => slot.class);
+  const uniqueClassIds = uniqueClasses.map((classItem) => classItem.id);
+  const classNameById = new Map(uniqueClasses.map((classItem) => [classItem.id, classItem.name]));
 
   const requestHeaders = await headers();
   const host = requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host");
@@ -240,6 +253,34 @@ export default async function TeacherDashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Мои классы</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {uniqueClasses.length === 0 ? (
+            <p className="text-sm text-muted-foreground">У вас пока нет назначенных классов.</p>
+          ) : (
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {uniqueClasses.map((classItem) => (
+                <article key={classItem.id} className="rounded-lg border p-4">
+                  <p className="text-base font-semibold">{classItem.name}</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Учеников: {classItem._count.students}
+                  </p>
+                  <Link
+                    href={`/teacher/class/${classItem.id}`}
+                    className="mt-3 inline-flex text-sm font-medium text-primary hover:underline"
+                  >
+                    Открыть класс →
+                  </Link>
+                </article>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <CollapsibleSection
         title="Early Warning System"

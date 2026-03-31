@@ -41,7 +41,7 @@ export function computeClassFinalPercentBySubject(grades: Grade[]): Record<strin
 export function isStudentAtRiskByKazakh(grades: Grade[]): boolean {
   if (grades.length === 0) return false;
   const overall = computeKazakhGrade(grades);
-  if (overall.finalPercent !== null && overall.finalPercent < 50) return true;
+  if (overall.finalPercent !== null && overall.finalPercent < 65) return true;
 
   const bySubject = new Map<string, Grade[]>();
   for (const grade of grades) {

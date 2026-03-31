@@ -22,27 +22,31 @@ const WEEKDAYS = [
   { iso: 5, label: "Пт" },
 ] as const;
 
-function getDateForDayOfWeek(dow: number): Date {
-  const today = new Date();
-  const currentDow = today.getDay() === 0 ? 7 : today.getDay();
-  const diff = dow - currentDow;
-  const d = new Date(today);
-  d.setDate(today.getDate() + diff);
-  d.setHours(0, 0, 0, 0);
-  return d;
+function getMondayOfWeek(dateStr: string): Date {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const date = new Date(y, m - 1, d);
+  const dow = date.getDay() === 0 ? 7 : date.getDay();
+  date.setDate(date.getDate() - (dow - 1));
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+
+function getDateForDow(dow: number, monday: Date): string {
+  const d = new Date(monday)
+  d.setDate(monday.getDate() + (dow - 1))
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`  // returns ISO string directly
 }
 
 export default async function SchedulePage() {
   const session = await requireAuth("STUDENT");
   const today = todayLocalISO();
-  const now = new Date();
-  const currentDow = now.getDay() === 0 ? 7 : now.getDay();
-  const weekStart = new Date(now);
-  weekStart.setDate(now.getDate() - currentDow + 1);
-  weekStart.setHours(0, 0, 0, 0);
-  const weekEnd = new Date(weekStart);
-  weekEnd.setDate(weekStart.getDate() + 4);
-  weekEnd.setHours(23, 59, 59, 999);
+  const monday = getMondayOfWeek(today);
+  const friday = new Date(monday);
+  friday.setDate(monday.getDate() + 4);
+  friday.setHours(23, 59, 59, 999);
 
   const studentProfile = await prisma.studentProfile.findFirst({
     where: { userId: session.user.id },
@@ -75,8 +79,8 @@ export default async function SchedulePage() {
     prisma.substitution.findMany({
       where: {
         date: {
-          gte: weekStart,
-          lte: weekEnd,
+          gte: monday,
+          lte: friday,
         },
       },
     }),
@@ -92,7 +96,7 @@ export default async function SchedulePage() {
   const cellKey = (day: number, slot: number) => `${day}-${slot}`;
   const grid = new Map<
     string,
-    { subject: string; room: string; teacherName: string; teacherId: string }
+    { subject: string; room: string; teacherId: string }
   >();
 
   for (const row of slots) {
@@ -103,7 +107,6 @@ export default async function SchedulePage() {
       grid.set(key, {
         subject: row.subject,
         room: row.room,
-        teacherName: row.teacher.user.name,
         teacherId: row.teacherId,
       });
     }
@@ -157,24 +160,24 @@ export default async function SchedulePage() {
                   {WEEKDAYS.map(({ iso }) => {
                     const cell = grid.get(cellKey(iso, slot));
                     const isTodayCol = highlightDay === iso;
-                    const slotDate = getDateForDayOfWeek(iso);
-                    const substitution = cell
+                    const slotDate = getDateForDow(iso, monday);
+                    const sub = cell
                       ? substitutions.find(
-                          (s) =>
+                          (s: typeof substitutions[number]) =>
                             s.originalTeacherId === cell.teacherId &&
-                            s.date.toDateString() === slotDate.toDateString(),
+                            s.date.toISOString().slice(0, 10) === slotDate
                         )
                       : undefined;
-                    const isSub = Boolean(substitution);
+                    const isSub = Boolean(sub);
                     const substituteName =
-                      substitution?.substituteTeacherId
-                        ? teacherMap[substitution.substituteTeacherId] ?? ""
+                      sub?.substituteTeacherId
+                        ? teacherMap[sub.substituteTeacherId] ?? ""
                         : "";
-                    const displayTeacherName = substitution
+                    const substitutionText = sub
                       ? substituteName
-                        ? `${substituteName} (замена)`
-                        : "Учитель отсутствует"
-                      : cell?.teacherName ?? "";
+                        ? `⚠️ Замена: ${substituteName}`
+                        : "⚠️ Учитель отсутствует"
+                      : "";
                     return (
                       <TableCell
                         key={iso}
@@ -197,15 +200,10 @@ export default async function SchedulePage() {
                             <p className="text-xs text-muted-foreground">
                               каб. {cell.room}
                             </p>
-                            <p className="text-xs text-muted-foreground">
-                              {displayTeacherName}
-                            </p>
                             {isSub ? (
-                              <>
-                                <p className="mt-1 text-xs text-amber-700">
-                                  ⚠️ {displayTeacherName}
-                                </p>
-                              </>
+                              <p className="mt-1 text-xs text-amber-700">
+                                {substitutionText}
+                              </p>
                             ) : null}
                           </div>
                         ) : (

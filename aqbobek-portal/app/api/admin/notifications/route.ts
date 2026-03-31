@@ -22,13 +22,19 @@ export async function GET() {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    const notifications = await prisma.notification.findMany({
-      include: { targetClass: { select: { name: true } } },
-      orderBy: { createdAt: "desc" },
-      take: 50,
-    });
+    const [notifications, announcements] = await Promise.all([
+      prisma.notification.findMany({
+        include: { targetClass: { select: { name: true } } },
+        orderBy: { createdAt: "desc" },
+        take: 50,
+      }),
+      prisma.announcement.findMany({
+        orderBy: { createdAt: "desc" },
+        take: 5,
+      }),
+    ]);
 
-    return NextResponse.json(notifications);
+    return NextResponse.json({ notifications, announcements });
   } catch (error) {
     console.error("GET /api/admin/notifications failed:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
@@ -65,15 +71,16 @@ export async function POST(request: Request) {
       },
     });
 
-    try {
-      await pusherServer.trigger("notifications", "new-notification", {
-        title: created.title,
-        body: created.body,
-        targetRole: created.targetRole,
-        targetClassId: created.targetClassId,
-      });
-    } catch (pusherError) {
-      console.warn("Pusher trigger failed for notification:", pusherError);
+    if (pusherServer) {
+      try {
+        await pusherServer.trigger("notifications", "new-notification", {
+          title: created.title,
+          body: created.body,
+          targetRole: created.targetRole,
+        });
+      } catch (e) {
+        console.error("Pusher trigger failed:", e);
+      }
     }
 
     return NextResponse.json(created, { status: 201 });

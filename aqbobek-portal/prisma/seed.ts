@@ -22,11 +22,10 @@ const SUBJECTS = [
 ] as const;
 
 type GradeType = "CURRENT" | "SOR" | "SOC";
-type PerformanceLevel = "struggling" | "excellent" | "average";
+type PerformanceLevel = "struggling" | "excellent" | "average" | "mixed";
 
 const QUARTERS = [1, 2, 3, 4] as const;
-const SOR1_MAX_SCORES = [10, 15, 20] as const;
-const SOR2_MAX_SCORES = [15, 20, 25] as const;
+const SOR_MAX_SCORES = [10, 15, 20, 25] as const;
 const SOC_MAX_SCORES = [20, 25, 30] as const;
 
 const TOPICS_BY_SUBJECT: Record<
@@ -76,11 +75,18 @@ const TOPICS_BY_SUBJECT: Record<
 };
 
 const TEACHERS = [
+  // Primary teachers
   { name: "Арман Тлеубергенов", subject: "Математика" },
   { name: "Сауле Омарова", subject: "Физика" },
   { name: "Ержан Нургалиев", subject: "Информатика" },
   { name: "Марина Кузнецова", subject: "История" },
   { name: "Гульмира Алимбекова", subject: "Биология" },
+  // Substitute teachers
+  { name: "Дамир Сейтжанов", subject: "Математика" },
+  { name: "Айгуль Бекова", subject: "Физика" },
+  { name: "Руслан Омаров", subject: "Информатика" },
+  { name: "Зарина Ахметова", subject: "История" },
+  { name: "Асель Нурланова", subject: "Биология" },
 ];
 
 const FIRST_NAMES = [
@@ -183,21 +189,28 @@ function scoreByPercentBand(maxScore: number, minPercent: number, maxPercent: nu
 }
 
 function scoreByPerformance(type: GradeType, maxScore: number, performance: PerformanceLevel): number {
-  if (type === "CURRENT") {
-    if (performance === "struggling") return randomInt(1, 5);
-    if (performance === "excellent") return randomInt(8, 10);
-    return randomInt(5, 8);
-  }
-
-  if (type === "SOR") {
-    if (performance === "struggling") return scoreByPercentBand(maxScore, 30, 50);
-    if (performance === "excellent") return scoreByPercentBand(maxScore, 80, 100);
-    return scoreByPercentBand(maxScore, 50, 75);
-  }
-
-  if (performance === "struggling") return scoreByPercentBand(maxScore, 25, 45);
-  if (performance === "excellent") return scoreByPercentBand(maxScore, 85, 100);
-  return scoreByPercentBand(maxScore, 45, 70);
+  const effectivePerformance: Exclude<PerformanceLevel, "mixed"> =
+    performance === "mixed" ? (Math.random() < 0.5 ? "excellent" : "struggling") : performance;
+  const baseScore =
+    type === "CURRENT"
+      ? effectivePerformance === "struggling"
+        ? randomInt(1, 5)
+        : effectivePerformance === "excellent"
+          ? randomInt(8, 10)
+          : randomInt(5, 8)
+      : type === "SOR"
+        ? effectivePerformance === "struggling"
+          ? scoreByPercentBand(maxScore, 30, 50)
+          : effectivePerformance === "excellent"
+            ? scoreByPercentBand(maxScore, 80, 100)
+            : scoreByPercentBand(maxScore, 50, 75)
+        : effectivePerformance === "struggling"
+          ? scoreByPercentBand(maxScore, 25, 45)
+          : effectivePerformance === "excellent"
+            ? scoreByPercentBand(maxScore, 85, 100)
+            : scoreByPercentBand(maxScore, 45, 70);
+  const noise = randomInt(-Math.floor(maxScore * 0.1), Math.floor(maxScore * 0.1));
+  return Math.max(0, Math.min(maxScore, baseScore + noise));
 }
 
 function buildStudentNames(count: number): string[] {
@@ -280,9 +293,16 @@ async function main() {
   }
   const strugglingCount = Math.round(studentNames.length * 0.15);
   const excellentCount = Math.round(studentNames.length * 0.2);
+  const mixedCount = Math.round(studentNames.length * 0.15);
   const strugglingStudentIndexes = new Set(studentIndexes.slice(0, strugglingCount));
   const excellentStudentIndexes = new Set(
     studentIndexes.slice(strugglingCount, strugglingCount + excellentCount),
+  );
+  const mixedStudentIndexes = new Set(
+    studentIndexes.slice(
+      strugglingCount + excellentCount,
+      strugglingCount + excellentCount + mixedCount,
+    ),
   );
 
   const studentProfiles: Array<{
@@ -335,9 +355,13 @@ async function main() {
         ? "struggling"
         : excellentStudentIndexes.has(studentCounter)
           ? "excellent"
+          : mixedStudentIndexes.has(studentCounter)
+            ? "mixed"
           : "average";
       const gradeRows = SUBJECTS.flatMap((subject) => {
         const topics = TOPICS_BY_SUBJECT[subject];
+        const subjectPerformance: Exclude<PerformanceLevel, "mixed"> =
+          performance === "mixed" ? (Math.random() < 0.5 ? "excellent" : "struggling") : performance;
 
         return QUARTERS.flatMap((quarter) => {
           const quarterRows: Array<{
@@ -351,53 +375,46 @@ async function main() {
             date: Date;
           }> = [];
 
-          for (let foIndex = 0; foIndex < 6; foIndex += 1) {
+          const hasMissingFo = Math.random() < 0.1;
+          const foCount = hasMissingFo ? 0 : randomInt(3, 8);
+          for (let foIndex = 0; foIndex < foCount; foIndex += 1) {
             const maxScore = 10;
             quarterRows.push({
               studentId: studentProfile.id,
               subject,
               topic: pickRandom(topics).name,
-              score: scoreByPerformance("CURRENT", maxScore, performance),
+              score: scoreByPerformance("CURRENT", maxScore, subjectPerformance),
               maxScore,
               type: "CURRENT",
-              attendance: Math.random() < (performance === "struggling" ? 0.82 : 0.93),
+              attendance: Math.random() < (subjectPerformance === "struggling" ? 0.82 : 0.93),
               date: randomDateByQuarter(quarter),
             });
           }
 
-          const sor1Max = pickRandom(SOR1_MAX_SCORES);
-          quarterRows.push({
-            studentId: studentProfile.id,
-            subject,
-            topic: pickRandom(topics).name,
-            score: scoreByPerformance("SOR", sor1Max, performance),
-            maxScore: sor1Max,
-            type: "SOR",
-            attendance: Math.random() < (performance === "struggling" ? 0.82 : 0.93),
-            date: randomDateByQuarter(quarter),
-          });
-
-          const sor2Max = pickRandom(SOR2_MAX_SCORES);
-          quarterRows.push({
-            studentId: studentProfile.id,
-            subject,
-            topic: pickRandom(topics).name,
-            score: scoreByPerformance("SOR", sor2Max, performance),
-            maxScore: sor2Max,
-            type: "SOR",
-            attendance: Math.random() < (performance === "struggling" ? 0.82 : 0.93),
-            date: randomDateByQuarter(quarter),
-          });
+          const sorCount = randomInt(1, 3);
+          for (let sorIndex = 0; sorIndex < sorCount; sorIndex += 1) {
+            const sorMax = pickRandom(SOR_MAX_SCORES);
+            quarterRows.push({
+              studentId: studentProfile.id,
+              subject,
+              topic: pickRandom(topics).name,
+              score: scoreByPerformance("SOR", sorMax, subjectPerformance),
+              maxScore: sorMax,
+              type: "SOR",
+              attendance: Math.random() < (subjectPerformance === "struggling" ? 0.82 : 0.93),
+              date: randomDateByQuarter(quarter),
+            });
+          }
 
           const socMax = pickRandom(SOC_MAX_SCORES);
           quarterRows.push({
             studentId: studentProfile.id,
             subject,
             topic: pickRandom(topics).name,
-            score: scoreByPerformance("SOC", socMax, performance),
+            score: scoreByPerformance("SOC", socMax, subjectPerformance),
             maxScore: socMax,
             type: "SOC",
-            attendance: Math.random() < (performance === "struggling" ? 0.82 : 0.93),
+            attendance: Math.random() < (subjectPerformance === "struggling" ? 0.82 : 0.93),
             date: randomDateByQuarter(quarter),
           });
 

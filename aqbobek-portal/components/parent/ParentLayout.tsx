@@ -7,6 +7,7 @@ import { useMemo, useState } from "react";
 import { Menu, X } from "lucide-react";
 import { signOut } from "next-auth/react";
 
+import PusherNotificationBanner from "@/components/shared/PusherNotificationBanner";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -91,7 +92,10 @@ export default function ParentLayout({ children, parentName, childName }: Parent
         />
       ) : null}
 
-      <main className="flex-1 overflow-y-auto p-4 pt-16 md:p-6 md:pt-6">{children}</main>
+      <main className="flex-1 overflow-y-auto p-4 pt-16 md:p-6 md:pt-6">
+        <PusherNotificationBanner />
+        {children}
+      </main>
     </div>
   );
 }

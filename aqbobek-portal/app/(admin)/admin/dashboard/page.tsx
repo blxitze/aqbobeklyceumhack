@@ -1,10 +1,13 @@
+import Link from "next/link";
+import { Monitor } from "lucide-react";
+
 import GlobalPerformanceChart from "@/components/admin/GlobalPerformanceChart";
 import AtRiskSummary from "@/components/admin/AtRiskSummary";
 import CollapsibleSection from "@/components/shared/CollapsibleSection";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireAuth } from "@/lib/auth";
 import { computeKazakhGrade } from "@/lib/bilimclass";
-import { attendanceRate, average } from "@/lib/admin-analytics";
+import { average, classAttendanceRate } from "@/lib/admin-analytics";
 import { prisma } from "@/lib/prisma";
 
 function metricColor(value: number): string {
@@ -54,7 +57,7 @@ export default async function AdminDashboard() {
     const hasCriticalSubject = subjectFinalPercents.some((percent) => percent < 40);
     return hasCriticalSubject || overallFinalPercent < 50;
   }).length;
-  const schoolAttendanceRate = attendanceRate(grades);
+  const schoolAttendanceRate = classAttendanceRate(grades);
 
   return (
     <section className="space-y-6">
@@ -147,6 +150,21 @@ export default async function AdminDashboard() {
           </CardContent>
         </Card>
       </div>
+
+      <Link href="/kiosk" target="_blank" rel="noopener noreferrer" className="block">
+        <Card className="border-amber-300/40 bg-slate-900 text-slate-100 shadow-lg transition-colors hover:bg-slate-800">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Monitor className="h-5 w-5 text-amber-300" />
+              Kiosk Mode
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <p className="text-sm text-slate-300">Открыть режим интерактивной стенгазеты</p>
+            <span className="inline-flex text-sm font-medium text-amber-300">Открыть →</span>
+          </CardContent>
+        </Card>
+      </Link>
     </section>
   );
 }
