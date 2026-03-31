@@ -87,6 +87,7 @@ NEXT_PUBLIC_PUSHER_CLUSTER=eu
 DATABASE_URL=            # тот же PostgreSQL URL
 OPENAI_API_KEY=          # тот же ключ (опционально, для tutor-text)
 INTERNAL_SECRET=         # тот же, что в portal
+NEXT_URL=http://localhost:3000
 ```
 
 ---
