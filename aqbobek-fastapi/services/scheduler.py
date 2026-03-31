@@ -222,6 +222,10 @@ def handle_substitution(
             "substituteTeacherId": None,
         }
 
+    for slot in affected:
+        slot.teacher_id = substitute_id
+    db.commit()
+
     diff: list[str] = []
     updated: list[dict] = []
     for slot in affected:
