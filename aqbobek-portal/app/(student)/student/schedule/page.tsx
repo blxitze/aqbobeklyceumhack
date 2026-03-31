@@ -22,8 +22,27 @@ const WEEKDAYS = [
   { iso: 5, label: "Пт" },
 ] as const;
 
+function getDateForDayOfWeek(dow: number): Date {
+  const today = new Date();
+  const currentDow = today.getDay() === 0 ? 7 : today.getDay();
+  const diff = dow - currentDow;
+  const d = new Date(today);
+  d.setDate(today.getDate() + diff);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
 export default async function SchedulePage() {
   const session = await requireAuth("STUDENT");
+  const today = todayLocalISO();
+  const now = new Date();
+  const currentDow = now.getDay() === 0 ? 7 : now.getDay();
+  const weekStart = new Date(now);
+  weekStart.setDate(now.getDate() - currentDow + 1);
+  weekStart.setHours(0, 0, 0, 0);
+  const weekEnd = new Date(weekStart);
+  weekEnd.setDate(weekStart.getDate() + 4);
+  weekEnd.setHours(23, 59, 59, 999);
 
   const studentProfile = await prisma.studentProfile.findFirst({
     where: { userId: session.user.id },
@@ -45,18 +64,35 @@ export default async function SchedulePage() {
     );
   }
 
-  const slots = await prisma.scheduleSlot.findMany({
-    where: { classId: studentProfile.classId, isActive: true },
-    include: {
-      teacher: { include: { user: { select: { name: true } } } },
-    },
-    orderBy: [{ dayOfWeek: "asc" }, { timeSlot: "asc" }],
-  });
+  const [slots, substitutions, teachers] = await Promise.all([
+    prisma.scheduleSlot.findMany({
+      where: { classId: studentProfile.classId, isActive: true },
+      include: {
+        teacher: { include: { user: { select: { name: true } } } },
+      },
+      orderBy: [{ dayOfWeek: "asc" }, { timeSlot: "asc" }],
+    }),
+    prisma.substitution.findMany({
+      where: {
+        date: {
+          gte: weekStart,
+          lte: weekEnd,
+        },
+      },
+    }),
+    prisma.teacherProfile.findMany({
+      include: { user: true },
+    }),
+  ]);
+
+  const teacherMap = Object.fromEntries(
+    teachers.map((t: typeof teachers[number]) => [t.id, t.user.name]),
+  );
 
   const cellKey = (day: number, slot: number) => `${day}-${slot}`;
   const grid = new Map<
     string,
-    { subject: string; room: string; teacherName: string }
+    { subject: string; room: string; teacherName: string; teacherId: string }
   >();
 
   for (const row of slots) {
@@ -68,6 +104,7 @@ export default async function SchedulePage() {
         subject: row.subject,
         room: row.room,
         teacherName: row.teacher.user.name,
+        teacherId: row.teacherId,
       });
     }
   }
@@ -120,6 +157,24 @@ export default async function SchedulePage() {
                   {WEEKDAYS.map(({ iso }) => {
                     const cell = grid.get(cellKey(iso, slot));
                     const isTodayCol = highlightDay === iso;
+                    const slotDate = getDateForDayOfWeek(iso);
+                    const substitution = cell
+                      ? substitutions.find(
+                          (s) =>
+                            s.originalTeacherId === cell.teacherId &&
+                            s.date.toDateString() === slotDate.toDateString(),
+                        )
+                      : undefined;
+                    const isSub = Boolean(substitution);
+                    const substituteName =
+                      substitution?.substituteTeacherId
+                        ? teacherMap[substitution.substituteTeacherId] ?? ""
+                        : "";
+                    const displayTeacherName = substitution
+                      ? substituteName
+                        ? `${substituteName} (замена)`
+                        : "Учитель отсутствует"
+                      : cell?.teacherName ?? "";
                     return (
                       <TableCell
                         key={iso}
@@ -130,7 +185,12 @@ export default async function SchedulePage() {
                         )}
                       >
                         {cell ? (
-                          <div className="space-y-0.5">
+                          <div
+                            className={cn(
+                              "space-y-0.5",
+                              isSub && "rounded border border-amber-200 bg-amber-50 p-1",
+                            )}
+                          >
                             <p className="font-medium leading-tight">
                               {cell.subject}
                             </p>
@@ -138,8 +198,15 @@ export default async function SchedulePage() {
                               каб. {cell.room}
                             </p>
                             <p className="text-xs text-muted-foreground">
-                              {cell.teacherName}
+                              {displayTeacherName}
                             </p>
+                            {isSub ? (
+                              <>
+                                <p className="mt-1 text-xs text-amber-700">
+                                  ⚠️ {displayTeacherName}
+                                </p>
+                              </>
+                            ) : null}
                           </div>
                         ) : (
                           <span className="text-muted-foreground">—</span>

@@ -38,6 +38,7 @@ export default function TeacherLayout({
   const classesHref = firstClassId ? `/teacher/class/${firstClassId}` : "/teacher/dashboard";
   const navLinks = [
     { href: "/teacher/dashboard", label: "Дашборд" },
+    { href: "/teacher/schedule", label: "Расписание" },
     { href: classesHref, label: "Мои классы" },
     { href: "/teacher/reports", label: "Отчёты" },
   ];

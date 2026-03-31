@@ -225,9 +225,6 @@ def handle_substitution(
     diff: list[str] = []
     updated: list[dict] = []
     for slot in affected:
-        if substitute_id:
-            slot.teacher_id = substitute_id
-        slot.is_active = True
         status_text = "замена назначена"
         diff.append(f"Урок {slot.time_slot}: {slot.subject} — {status_text}")
         updated.append(
@@ -242,8 +239,6 @@ def handle_substitution(
                 "substituteTeacherId": substitute_id,
             }
         )
-
-    db.commit()
 
     msg = f"Обработано {len(affected)} уроков. Замена назначена."
     return {

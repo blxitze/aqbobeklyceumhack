@@ -54,7 +54,28 @@ const WEEKDAYS = [
 
 const TIME_SLOTS = [1, 2, 3, 4, 5, 6] as const;
 
+function toLocalDateISO(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function getWeekDates(dateStr: string): string[] {
+  const [year, month, day] = dateStr.split("-").map(Number);
+  const selected = new Date(year, month - 1, day);
+  const iso = dateToIsoWeekday(dateStr);
+  const monday = new Date(selected);
+  monday.setDate(selected.getDate() - (iso - 1));
+  return [0, 1, 2, 3, 4].map((offset) => {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + offset);
+    return toLocalDateISO(d);
+  });
+}
+
 export default function ScheduleGrid({ classes, teachers, initialDate }: Props) {
+  const [hydrated, setHydrated] = useState(false);
   const [selectedDate, setSelectedDate] = useState(initialDate);
   const [selectedClassId, setSelectedClassId] = useState(classes[0]?.id ?? "");
   const [slots, setSlots] = useState<ScheduleSlot[]>([]);
@@ -77,6 +98,10 @@ export default function ScheduleGrid({ classes, teachers, initialDate }: Props) 
       .catch(() => setFastapiOnline(false));
   }, []);
 
+  useEffect(() => {
+    setHydrated(true);
+  }, []);
+
   const loadSlotsFromDB = useCallback(async (classId: string, date: string) => {
     if (!classId || !date) {
       setSlots([]);
@@ -87,15 +112,27 @@ export default function ScheduleGrid({ classes, teachers, initialDate }: Props) 
     setLoading(true);
     setMessage("");
     try {
-      const params = new URLSearchParams({ classId, date });
-      const res = await fetch(`/api/schedule/slots?${params.toString()}`);
-      const data = (await res.json()) as { slots?: ScheduleSlot[] };
-      setSlots(data.slots ?? []);
+      const weekDates = getWeekDates(date);
+      const dayResponses = await Promise.all(
+        weekDates.map(async (dayDate) => {
+          const params = new URLSearchParams({ classId, date: dayDate });
+          const res = await fetch(`/api/schedule/slots?${params.toString()}`);
+          const data = (await res.json()) as { slots?: ScheduleSlot[] };
+          return data.slots ?? [];
+        }),
+      );
+      const allSlots = dayResponses.flat();
+      setSlots(allSlots);
 
-      const subParams = new URLSearchParams({ date });
-      const subRes = await fetch(`/api/schedule/substitutions?${subParams.toString()}`);
-      const subData = (await subRes.json()) as { substitutions?: SubstitutionRecord[] };
-      setSubstitutions(subData.substitutions ?? []);
+      const subResponses = await Promise.all(
+        weekDates.map(async (dayDate) => {
+          const params = new URLSearchParams({ date: dayDate });
+          const res = await fetch(`/api/schedule/substitutions?${params.toString()}`);
+          const data = (await res.json()) as { substitutions?: SubstitutionRecord[] };
+          return data.substitutions ?? [];
+        }),
+      );
+      setSubstitutions(subResponses.flat());
     } catch {
       setSlots([]);
       setSubstitutions([]);
@@ -177,12 +214,14 @@ export default function ScheduleGrid({ classes, teachers, initialDate }: Props) 
   const findSlot = (day: number, timeSlot: number) =>
     slots.find((s) => s.timeSlot === timeSlot && s.dayOfWeek === day);
 
-  const isSlotSubstituted = (slot?: ScheduleSlot) => {
-    if (!slot) return false;
+  const isSlotSubstituted = (slot?: ScheduleSlot, dayOfWeek?: number) => {
+    if (!slot || !dayOfWeek) return false;
+    const weekDates = getWeekDates(selectedDate);
+    const slotDate = weekDates[dayOfWeek - 1];
     return substitutions.some(
       (sub) =>
-        sub.originalTeacherId === slot.teacherId ||
-        sub.substituteTeacherId === slot.teacherId,
+        sub.originalTeacherId === slot.teacherId &&
+        new Date(sub.date).toISOString().slice(0, 10) === slotDate,
     );
   };
 
@@ -250,18 +289,22 @@ export default function ScheduleGrid({ classes, teachers, initialDate }: Props) 
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-14">Урок</TableHead>
-                  {WEEKDAYS.map(({ iso, label }) => (
-                    <TableHead
-                      key={iso}
-                      className={cn(
-                        "min-w-[100px] text-center",
-                        selectedDay === iso &&
-                          "bg-blue-100 font-bold text-primary dark:bg-primary/20",
-                      )}
-                    >
-                      {label}
-                    </TableHead>
-                  ))}
+                  {WEEKDAYS.map(({ iso, label }) => {
+                    const hasSlots = hydrated && slots.some((s) => s.dayOfWeek === iso);
+                    return (
+                      <TableHead
+                        key={iso}
+                        className={cn(
+                          "min-w-[100px] text-center",
+                          !hasSlots && "bg-muted/50 text-muted-foreground",
+                          selectedDay === iso &&
+                            "bg-blue-100 font-bold text-primary dark:bg-primary/20",
+                        )}
+                      >
+                        {hasSlots ? label : `${label} (не сгенерировано)`}
+                      </TableHead>
+                    );
+                  })}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -273,7 +316,7 @@ export default function ScheduleGrid({ classes, teachers, initialDate }: Props) 
                     {WEEKDAYS.map(({ iso }) => {
                       const slot = findSlot(iso, rowSlot);
                       const isToday = selectedDay === iso;
-                      const substituted = isSlotSubstituted(slot);
+                      const substituted = isSlotSubstituted(slot, iso);
                       return (
                         <TableCell
                           key={iso}
