@@ -4,6 +4,8 @@ import { Search, TriangleAlert } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { Avatar } from "@/components/shared/Avatar";
+import { RiskBadge } from "@/components/shared/RiskBadge";
 import type { RiskLevel, TeacherStudent } from "@/components/teacher/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,18 +20,6 @@ type SortKey = "name" | "finalPercent" | "socPercent" | "attendanceRate" | "tren
 type SortDirection = "asc" | "desc";
 
 const SUBJECTS = ["Математика", "Физика", "Информатика", "История", "Биология"];
-
-function riskLabel(level: RiskLevel): string {
-  if (level === "high") return "Высокий риск";
-  if (level === "medium") return "Средний риск";
-  return "Норма";
-}
-
-function riskClass(level: RiskLevel): string {
-  if (level === "high") return "bg-red-100 text-red-700";
-  if (level === "medium") return "bg-amber-100 text-amber-700";
-  return "bg-emerald-100 text-emerald-700";
-}
 
 function scoreClass(score: number): string {
   if (score < 40) return "text-red-600";
@@ -236,11 +226,14 @@ export default function EarlyWarningSystem({ students }: EarlyWarningSystemProps
                 className={cn(student.riskLevel === "high" ? "bg-red-50/60 hover:bg-red-100/60" : "")}
               >
                 <TableCell>
-                  <div className="space-y-1">
-                    <p className="font-medium">{student.name}</p>
-                    <span className="inline-flex rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
-                      {student.className}
-                    </span>
+                  <div className="flex items-center gap-3">
+                    <Avatar name={student.name} size="sm" />
+                    <div className="space-y-1">
+                      <p className="font-medium">{student.name}</p>
+                      <span className="inline-flex rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+                        {student.className}
+                      </span>
+                    </div>
                   </div>
                 </TableCell>
                 <TableCell className={`font-semibold ${scoreClass(student.finalPercent ?? 0)}`}>
@@ -266,9 +259,7 @@ export default function EarlyWarningSystem({ students }: EarlyWarningSystemProps
                   <span className="text-base font-semibold">{trend.icon}</span>
                 </TableCell>
                 <TableCell>
-                  <span className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${riskClass(student.riskLevel)}`}>
-                    {riskLabel(student.riskLevel)}
-                  </span>
+                  <RiskBadge level={student.riskLevel} />
                 </TableCell>
                 <TableCell>{student.weakestSubject || "—"}</TableCell>
                 <TableCell>

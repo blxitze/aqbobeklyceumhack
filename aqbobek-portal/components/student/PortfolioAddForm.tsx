@@ -8,10 +8,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 const TYPE_OPTIONS = [
-  { value: "CERTIFICATE" as const, label: "Сертификат" },
   { value: "ACHIEVEMENT" as const, label: "Достижение" },
+  { value: "CERTIFICATE" as const, label: "Сертификат" },
   { value: "OLYMPIAD" as const, label: "Олимпиада" },
-  { value: "OTHER" as const, label: "Другое" },
+  { value: "OTHER" as const, label: "Проект" },
 ];
 
 type PortfolioType = (typeof TYPE_OPTIONS)[number]["value"];
@@ -72,65 +72,86 @@ export default function PortfolioAddForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4 rounded-lg border bg-card p-4">
-      <div className="flex items-center justify-between gap-2">
-        <h2 className="text-lg font-semibold">Новое достижение</h2>
-        <Button type="button" variant="ghost" size="sm" onClick={() => setOpen(false)}>
-          Отмена
-        </Button>
-      </div>
+    <form
+      onSubmit={handleSubmit}
+      className="rounded-xl border border-[var(--border)] bg-white p-6 shadow-sm"
+    >
+      <h3
+        className="mb-6 text-lg font-semibold text-[var(--text-primary)]"
+        style={{ fontFamily: "Plus Jakarta Sans" }}
+      >
+        Добавить достижение
+      </h3>
 
-      <div className="space-y-2">
-        <Label htmlFor="portfolio-title">Название</Label>
-        <Input
-          id="portfolio-title"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          required
-          maxLength={200}
-          placeholder="Например: Региональная олимпиада"
-        />
-      </div>
+      <div className="space-y-4">
+        <div>
+          <Label
+            htmlFor="portfolio-title"
+            className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]"
+          >
+            Название
+          </Label>
+          <Input
+            id="portfolio-title"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            required
+            maxLength={200}
+            placeholder="Например: Региональная олимпиада"
+            className="w-full rounded-lg border border-[var(--border)] px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+          />
+        </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="portfolio-desc">Описание</Label>
-        <textarea
-          id="portfolio-desc"
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          maxLength={2000}
-          rows={4}
-          className="flex min-h-[100px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none ring-offset-background placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring"
-          placeholder="Кратко опишите достижение"
-        />
-      </div>
+        <div>
+          <Label
+            htmlFor="portfolio-desc"
+            className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]"
+          >
+            Описание
+          </Label>
+          <textarea
+            id="portfolio-desc"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            maxLength={2000}
+            rows={3}
+            className="w-full resize-none rounded-lg border border-[var(--border)] px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+            placeholder="Кратко опишите достижение"
+          />
+        </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="portfolio-type">Тип</Label>
-        <select
-          id="portfolio-type"
-          value={type}
-          onChange={(e) => setType(e.target.value as PortfolioType)}
-          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring"
+        <div>
+          <Label
+            htmlFor="portfolio-type"
+            className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]"
+          >
+            Тип
+          </Label>
+          <select
+            id="portfolio-type"
+            value={type}
+            onChange={(e) => setType(e.target.value as PortfolioType)}
+            className="w-full rounded-lg border border-[var(--border)] px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+          >
+            {TYPE_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {error ? <p className="text-sm text-red-600">{error}</p> : null}
+
+        <input type="hidden" value={date} readOnly />
+        <button
+          type="submit"
+          disabled={pending}
+          className="w-full rounded-lg bg-blue-500 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue-600 disabled:opacity-60"
         >
-          {TYPE_OPTIONS.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </select>
+          {pending ? "Сохранение..." : "Добавить достижение"}
+        </button>
       </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="portfolio-date">Дата</Label>
-        <Input id="portfolio-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
-      </div>
-
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
-
-      <Button type="submit" disabled={pending}>
-        {pending ? "Сохранение…" : "Сохранить"}
-      </Button>
     </form>
   );
 }

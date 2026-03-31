@@ -2,6 +2,8 @@ import { AlertTriangle, ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { headers } from "next/headers";
 
+import { Avatar } from "@/components/shared/Avatar";
+import { RiskBadge } from "@/components/shared/RiskBadge";
 import RiskPanel from "@/components/student/RiskPanel";
 import SubjectTable from "@/components/student/SubjectTable";
 import type { AnalyticsResponse, GradesResponse, SubjectAverage } from "@/components/student/types";
@@ -114,9 +116,15 @@ export default async function TeacherStudentPage({ params }: { params: Promise<{
           <ArrowLeft className="h-4 w-4 shrink-0" />
           Назад к дашборду
         </Link>
-        <div className="space-y-1">
-          <h1 className="text-2xl font-semibold">{profile.user.name}</h1>
-          <p className="text-sm text-muted-foreground">{profile.class.name}</p>
+        <div className="flex items-center gap-4">
+          <Avatar name={profile.user.name} size="lg" />
+          <div className="space-y-1">
+            <h1 className="text-2xl font-semibold">{profile.user.name}</h1>
+            <div className="flex items-center gap-2">
+              <p className="text-sm text-muted-foreground">{profile.class.name}</p>
+              {analytics.data ? <RiskBadge level={analytics.data.riskLevel} /> : null}
+            </div>
+          </div>
         </div>
       </div>
 

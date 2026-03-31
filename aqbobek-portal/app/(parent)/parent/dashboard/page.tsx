@@ -1,7 +1,8 @@
-import { AlertTriangle, TriangleAlert } from "lucide-react";
+import { AlertTriangle, CheckCircle, Star, TrendingUp } from "lucide-react";
 import { headers } from "next/headers";
 
 import WeeklySummaryPanel from "@/components/parent/WeeklySummaryPanel";
+import { StatCard } from "@/components/shared/StatCard";
 import GradesChart from "@/components/student/GradesChart";
 import SubjectTable from "@/components/student/SubjectTable";
 import type { AnalyticsResponse, GradesResponse, SubjectAverage } from "@/components/student/types";
@@ -13,13 +14,6 @@ type ApiResult<T> = {
   data: T | null;
   error: string | null;
 };
-
-function metricColor(value: number): string {
-  if (value >= 85) return "text-emerald-600";
-  if (value >= 65) return "text-blue-600";
-  if (value >= 40) return "text-amber-600";
-  return "text-red-600";
-}
 
 function formatCurrentDate(): string {
   return new Intl.DateTimeFormat("ru-RU", {
@@ -140,59 +134,35 @@ export default async function ParentDashboard() {
 
       {grades.data ? (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium">Итоговый % ребёнка</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p
-                className={`text-2xl font-semibold ${metricColor(
-                  grades.data.summary.finalPercent ?? 0,
-                )}`}
-              >
-                {grades.data.summary.finalPercent !== null
-                  ? `${grades.data.summary.finalPercent.toFixed(1)}%`
-                  : "—"}
-              </p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium">Посещаемость</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center gap-2">
-                <p className={`text-2xl font-semibold ${metricColor(grades.data.summary.attendanceRate)}`}>
-                  {grades.data.summary.attendanceRate.toFixed(1)}%
-                </p>
-                {grades.data.summary.attendanceRate < 80 ? (
-                  <TriangleAlert className="h-5 w-5 text-amber-500" />
-                ) : null}
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium">Лучший предмет</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-xl font-semibold">{grades.data.summary.bestSubject || "—"}</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium">Требует внимания</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p
-                className={`text-xl font-semibold ${
-                  analytics.data?.riskLevel === "high" ? "text-red-600" : "text-foreground"
-                }`}
-              >
-                {grades.data.summary.weakestSubject || "—"}
-              </p>
-            </CardContent>
-          </Card>
+          <StatCard
+            label="Итоговый % ребёнка"
+            value={grades.data.summary.finalPercent !== null ? `${grades.data.summary.finalPercent.toFixed(1)}%` : "—"}
+            icon={TrendingUp}
+            iconColor="text-blue-500"
+            iconBg="bg-blue-50"
+          />
+          <StatCard
+            label="Посещаемость"
+            value={`${grades.data.summary.attendanceRate.toFixed(1)}%`}
+            icon={CheckCircle}
+            iconColor="text-emerald-500"
+            iconBg="bg-emerald-50"
+          />
+          <StatCard
+            label="Лучший предмет"
+            value={grades.data.summary.bestSubject || "—"}
+            icon={Star}
+            iconColor="text-amber-500"
+            iconBg="bg-amber-50"
+          />
+          <StatCard
+            label="Требует внимания"
+            value={grades.data.summary.weakestSubject || "—"}
+            subtitle={analytics.data?.riskLevel === "high" ? "Повышенный риск" : undefined}
+            icon={AlertTriangle}
+            iconColor="text-red-500"
+            iconBg="bg-red-50"
+          />
         </div>
       ) : null}
 

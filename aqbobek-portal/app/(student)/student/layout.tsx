@@ -19,6 +19,7 @@ export default async function Layout({ children }: LayoutProps) {
     <StudentLayout
       studentName={session.user.name}
       className={studentProfile?.class.name ?? "Класс не назначен"}
+      userEmail={session.user.email}
     >
       {children}
     </StudentLayout>

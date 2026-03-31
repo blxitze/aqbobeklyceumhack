@@ -3,6 +3,7 @@
 import { Loader2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
+import { RiskBadge } from "@/components/shared/RiskBadge";
 import { Button } from "@/components/ui/button";
 import type { AnalyticsResponse, RiskLevel } from "@/components/student/types";
 
@@ -15,18 +16,6 @@ const COOLDOWN_MS = 60 * 60 * 1000; // 1 hour
 
 function cacheKey(studentId: string): string {
   return `tutor-text-${studentId}`;
-}
-
-function riskLevelLabel(level: RiskLevel): string {
-  if (level === "high") return "Высокий риск";
-  if (level === "medium") return "Средний риск";
-  return "Низкий риск";
-}
-
-function riskLevelClass(level: RiskLevel): string {
-  if (level === "high") return "bg-red-100 text-red-700";
-  if (level === "medium") return "bg-amber-100 text-amber-700";
-  return "bg-emerald-100 text-emerald-700";
 }
 
 function barClass(score: number): string {
@@ -151,9 +140,7 @@ export default function RiskPanel({ analytics, currentStudentId }: RiskPanelProp
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">Общий уровень риска</p>
-        <span className={`rounded-full px-3 py-1 text-xs font-semibold ${riskLevelClass(analytics.riskLevel)}`}>
-          {riskLevelLabel(analytics.riskLevel)}
-        </span>
+        <RiskBadge level={analytics.riskLevel as RiskLevel} />
       </div>
 
       {analytics.attendanceWarning ? (

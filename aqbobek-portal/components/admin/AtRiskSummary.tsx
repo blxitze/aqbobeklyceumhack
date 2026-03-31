@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 
+import { RiskBadge } from "@/components/shared/RiskBadge";
 import { Button } from "@/components/ui/button";
 
 type AtRiskStudent = {
@@ -67,6 +68,7 @@ export default function AtRiskSummary() {
       <p className="text-sm font-medium">В зоне риска: {rows.length} учеников</p>
       {rows.map((student) => (
         <div key={student.studentId} className={`rounded-lg p-3 ${rowClass(student.finalPercent)}`}>
+          {student.finalPercent < 40 ? <RiskBadge level="high" /> : <RiskBadge level="medium" />}
           <div className="flex items-start justify-between gap-2">
             <div>
               <p className="text-sm font-semibold">{student.name}</p>

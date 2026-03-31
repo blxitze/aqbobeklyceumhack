@@ -25,6 +25,7 @@ export default async function Layout({ children }: LayoutProps) {
     <ParentLayout
       parentName={session.user.name}
       childName={parentProfile?.child.user.name ?? "ребёнка"}
+      userEmail={session.user.email}
     >
       {children}
     </ParentLayout>

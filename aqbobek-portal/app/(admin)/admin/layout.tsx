@@ -8,6 +8,6 @@ type LayoutProps = {
 };
 
 export default async function Layout({ children }: LayoutProps) {
-  await requireAuth("ADMIN");
-  return <AdminLayout>{children}</AdminLayout>;
+  const session = await requireAuth("ADMIN");
+  return <AdminLayout adminName={session.user.name} userEmail={session.user.email}>{children}</AdminLayout>;
 }

@@ -2,6 +2,7 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { AlertTriangle, Bell, Calendar, Trophy } from "lucide-react";
 
 import { pusherClient } from "@/lib/pusher-client";
 
@@ -47,8 +48,20 @@ const slideMotion = {
   exit: { x: -220, opacity: 0 },
 };
 
-function formatPercent(value: number): string {
-  return `${value.toFixed(1)}%`;
+function formatClock(date: Date): string {
+  return new Intl.DateTimeFormat("ru-RU", {
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function initials(name: string): string {
+  return name
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
 }
 
 function rankBadge(position: number): string {
@@ -65,8 +78,16 @@ export default function KioskDisplay(props: KioskProps) {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [flashMessage, setFlashMessage] = useState("");
   const [highlightSubstitution, setHighlightSubstitution] = useState(false);
+  const [currentTime, setCurrentTime] = useState(formatClock(new Date()));
   const flashTimeoutRef = useRef<number | null>(null);
   const highlightTimeoutRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      setCurrentTime(formatClock(new Date()));
+    }, 1000);
+    return () => window.clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     const interval = window.setInterval(() => {
@@ -161,43 +182,79 @@ export default function KioskDisplay(props: KioskProps) {
 
   const slideContent = useMemo(() => {
     if (currentSlide === 0) {
+      const top3 = topStudents.slice(0, 3);
+      const remaining = topStudents.slice(3, 7);
       return (
-        <div className="flex h-full flex-col items-center justify-center gap-8">
-          <h1 style={{ fontSize: "72px" }}>🏆 Лучшие ученики</h1>
-          {topStudents.map((student, index) => (
-            <div key={`${student.name}-${index}`} className="flex items-center gap-6">
-              <span style={{ fontSize: "64px" }}>{rankBadge(index)}</span>
-              <div>
-                <div style={{ fontSize: "48px", fontWeight: "bold" }}>{student.name}</div>
-                <div style={{ fontSize: "32px", color: "#94a3b8" }}>
-                  {student.className} • {formatPercent(student.finalPercent)} • Оценка {student.predictedGrade}
+        <div className="flex h-full flex-col items-center justify-center px-16 pt-16">
+          <div className="mb-12 flex items-center gap-3">
+            <Trophy className="h-10 w-10 text-amber-400" />
+            <h1 className="text-6xl font-bold text-white">Лучшие ученики</h1>
+          </div>
+          <div className="mb-8 grid w-full max-w-4xl grid-cols-3 gap-6">
+            {top3.map((student, index) => (
+              <div
+                key={`${student.name}-${index}`}
+                className={`rounded-2xl border p-8 text-center ${
+                  index === 0 ? "border-amber-500/30 bg-amber-500/10" : "border-white/10 bg-white/5"
+                }`}
+              >
+                <div className="mb-4 text-5xl">{rankBadge(index)}</div>
+                <div
+                  className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-purple-600 text-3xl font-bold text-white"
+                >
+                  {initials(student.name)}
+                </div>
+                <div className="mb-1 text-2xl font-bold text-white">{student.name}</div>
+                <div className="mb-3 text-lg text-slate-400">{student.className}</div>
+                <div className={`font-mono text-4xl font-bold ${index === 0 ? "text-amber-400" : "text-white"}`}>
+                  {student.finalPercent.toFixed(1)}%
                 </div>
               </div>
-            </div>
-          ))}
-          {topStudents.length === 0 && (
-            <p style={{ fontSize: "48px", color: "#64748b" }}>Данные загружаются...</p>
-          )}
+            ))}
+          </div>
+          <div className="flex gap-4">
+            {remaining.map((s, i) => (
+              <div key={`${s.name}-${i}`} className="flex items-center gap-3 rounded-xl bg-white/5 px-6 py-3">
+                <span className="font-mono text-lg text-slate-500">#{i + 4}</span>
+                <span className="text-xl font-medium text-white">{s.name}</span>
+                <span className="font-mono text-xl text-blue-400">{s.finalPercent.toFixed(1)}%</span>
+              </div>
+            ))}
+          </div>
         </div>
       );
     }
 
     if (currentSlide === 1) {
+      const hasSubstitutions = substitutions.length > 0;
       return (
-        <div className="flex h-full flex-col items-center justify-center gap-8">
-          <h1 style={{ fontSize: "72px" }}>📋 Замены сегодня</h1>
-          {substitutions.length === 0 ? (
-            <p style={{ fontSize: "48px", color: "#4ade80" }}>✓ Замен нет — расписание без изменений</p>
+        <div className="flex h-full flex-col px-16 pt-20 pb-8">
+          <div className="mb-8 flex items-center gap-3">
+            <Calendar className="h-10 w-10 text-blue-400" />
+            <h1 className="text-5xl font-bold">Расписание сегодня</h1>
+            {hasSubstitutions && (
+              <span className="ml-4 rounded-full border border-red-500/30 bg-red-500/20 px-4 py-2 text-xl font-semibold text-red-400 animate-pulse">
+                ЗАМЕНА
+              </span>
+            )}
+          </div>
+          {!hasSubstitutions ? (
+            <div className="mt-10 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-8 text-3xl text-emerald-300">
+              Сегодня замен нет. Расписание без изменений.
+            </div>
           ) : (
             substitutions.map((sub, index) => (
-              <div key={`${sub.originalTeacherName}-${index}`} className="text-center">
-                <div style={{ fontSize: "48px" }}>{sub.originalTeacherName}</div>
-                <div style={{ fontSize: "36px", color: "#fbbf24" }}>
-                  {sub.substituteTeacherName
-                    ? `→ Замена: ${sub.substituteTeacherName}`
-                    : "→ Замена уточняется"}
+              <div
+                key={`${sub.originalTeacherName}-${index}`}
+                className="mb-4 flex items-center gap-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-8 py-4"
+              >
+                <AlertTriangle className="h-8 w-8 shrink-0 text-amber-400" />
+                <div>
+                  <div className="text-2xl font-bold text-amber-400">Замена учителя</div>
+                  <div className="mt-1 text-xl text-slate-300">
+                    {sub.originalTeacherName} → {sub.substituteTeacherName ?? "Назначается"}
+                  </div>
                 </div>
-                <div style={{ fontSize: "28px", color: "#94a3b8" }}>{sub.reason}</div>
               </div>
             ))
           )}
@@ -206,18 +263,23 @@ export default function KioskDisplay(props: KioskProps) {
     }
 
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-8 px-16">
-        <h1 style={{ fontSize: "72px" }}>📢 Объявления</h1>
+      <div className="flex h-full flex-col items-center justify-center px-16 pt-16">
+        <div className="mb-12 flex items-center gap-3">
+          <Bell className="h-10 w-10 text-blue-400" />
+          <h1 className="text-6xl font-bold">Объявления</h1>
+        </div>
         {announcements.length === 0 ? (
-          <p style={{ fontSize: "48px", color: "#64748b" }}>Объявлений нет</p>
+          <p className="text-5xl text-slate-500">Объявлений нет</p>
         ) : (
-          announcements.map((item, index) => (
-            <div key={`${item.title}-${index}`} className="max-w-4xl text-center">
-              <div style={{ fontSize: "48px", fontWeight: "bold" }}>{item.title}</div>
-              <div style={{ fontSize: "36px", color: "#cbd5e1", marginTop: "16px" }}>{item.body}</div>
-              <div style={{ fontSize: "24px", color: "#64748b", marginTop: "8px" }}>{item.authorName}</div>
-            </div>
-          ))
+          <div className="w-full max-w-4xl space-y-6">
+            {announcements.map((ann, i) => (
+              <div key={`${ann.title}-${i}`} className="rounded-2xl border border-white/10 bg-white/5 p-8">
+                <div className="mb-3 text-3xl font-bold text-white">{ann.title}</div>
+                <div className="text-xl leading-relaxed text-slate-400">{ann.body}</div>
+                <div className="mt-4 text-base text-slate-600">{ann.authorName}</div>
+              </div>
+            ))}
+          </div>
         )}
       </div>
     );
@@ -225,23 +287,28 @@ export default function KioskDisplay(props: KioskProps) {
 
   return (
     <section
-      className="relative h-screen w-screen overflow-hidden bg-slate-900 text-white cursor-none"
+      className="relative h-screen w-screen overflow-hidden bg-[#0A0F1E] text-white cursor-none"
+      style={{ fontFamily: "Plus Jakarta Sans" }}
       onClick={() => setCurrentSlide((prev) => (prev + 1) % 3)}
       role="presentation"
     >
-      <header className="absolute top-8 left-1/2 z-20 -translate-x-1/2 text-[32px] tracking-wide text-slate-200">
-        Aqbobek Lyceum
-      </header>
+      <div className="absolute top-0 right-0 left-0 z-10 flex h-16 items-center justify-between border-b border-white/10 px-12">
+        <div className="flex items-center gap-3">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-500 font-bold text-white">A</div>
+          <span className="text-lg font-semibold text-white">Aqbobek Lyceum</span>
+        </div>
+        <div className="font-mono text-sm text-slate-400">{currentTime}</div>
+      </div>
 
-      {highlightSubstitution ? (
-        <div className="absolute top-8 right-10 z-20 rounded-full bg-amber-400 px-5 py-2 text-[32px] font-bold text-slate-950">
-          ЗАМЕНА
+      {flashMessage ? (
+        <div className="absolute top-20 left-1/2 z-20 -translate-x-1/2 rounded-full bg-blue-600/90 px-6 py-3 text-2xl">
+          {flashMessage}
         </div>
       ) : null}
 
-      {flashMessage ? (
-        <div className="absolute top-24 left-1/2 z-20 -translate-x-1/2 rounded-full bg-blue-600/90 px-6 py-3 text-[32px]">
-          {flashMessage}
+      {highlightSubstitution ? (
+        <div className="absolute top-20 right-12 z-20 rounded-full border border-amber-500/30 bg-amber-500/20 px-4 py-2 text-lg font-semibold text-amber-300">
+          Обновление замены
         </div>
       ) : null}
 
@@ -253,18 +320,18 @@ export default function KioskDisplay(props: KioskProps) {
           exit="exit"
           variants={slideMotion}
           transition={{ duration: 0.6, ease: "easeInOut" }}
-          className="h-full w-full px-12 pt-24 pb-20"
+          className="h-full w-full"
         >
           {slideContent}
         </motion.div>
       </AnimatePresence>
 
-      <div className="absolute bottom-8 left-1/2 flex -translate-x-1/2 gap-4">
-        {[0, 1, 2].map((index) => (
+      <div className="absolute right-0 bottom-8 left-0 flex justify-center gap-3">
+        {[0, 1, 2].map((i) => (
           <div
-            key={index}
-            className={`h-2 rounded-full transition-all duration-300 ${
-              index === currentSlide ? "w-16 bg-white" : "w-8 bg-gray-600"
+            key={i}
+            className={`rounded-full transition-all duration-300 ${
+              i === currentSlide ? "h-3 w-8 bg-blue-500" : "h-3 w-3 bg-white/20"
             }`}
           />
         ))}

@@ -1,21 +1,15 @@
 import Link from "next/link";
-import { Monitor } from "lucide-react";
+import { AlertTriangle, GraduationCap, Monitor, TrendingUp, Users } from "lucide-react";
 
 import GlobalPerformanceChart from "@/components/admin/GlobalPerformanceChart";
 import AtRiskSummary from "@/components/admin/AtRiskSummary";
 import CollapsibleSection from "@/components/shared/CollapsibleSection";
+import { StatCard } from "@/components/shared/StatCard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireAuth } from "@/lib/auth";
 import { computeKazakhGrade } from "@/lib/bilimclass";
 import { average, classAttendanceRate } from "@/lib/admin-analytics";
 import { prisma } from "@/lib/prisma";
-
-function metricColor(value: number): string {
-  if (value >= 85) return "text-emerald-600";
-  if (value >= 65) return "text-blue-600";
-  if (value >= 40) return "text-amber-600";
-  return "text-red-600";
-}
 
 function formatDate(): string {
   return new Intl.DateTimeFormat("ru-RU", {
@@ -66,43 +60,37 @@ export default async function AdminDashboard() {
         <p className="text-sm text-muted-foreground">Aqbobek Lyceum • {formatDate()}</p>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
-        <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm">Всего учеников</CardTitle></CardHeader>
-          <CardContent><p className="text-2xl font-semibold">{studentsCount}</p></CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm">Всего учителей</CardTitle></CardHeader>
-          <CardContent><p className="text-2xl font-semibold">{teachersCount}</p></CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm">Классов</CardTitle></CardHeader>
-          <CardContent><p className="text-2xl font-semibold">{classesCount}</p></CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm">Итог % по школе (KZ)</CardTitle></CardHeader>
-          <CardContent>
-            <p
-              className={`text-2xl font-semibold ${
-                schoolFinalPercent !== null ? metricColor(schoolFinalPercent) : "text-muted-foreground"
-              }`}
-            >
-              {schoolFinalPercent !== null ? `${schoolFinalPercent.toFixed(1)}%` : "—"}
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm">В зоне риска</CardTitle></CardHeader>
-          <CardContent>
-            <p className={`text-2xl font-semibold ${atRiskStudents > 0 ? "text-red-600" : "text-emerald-600"}`}>
-              {atRiskStudents}
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm">Посещаемость</CardTitle></CardHeader>
-          <CardContent><p className="text-2xl font-semibold">{schoolAttendanceRate.toFixed(1)}%</p></CardContent>
-        </Card>
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard
+          label="Учеников всего"
+          value={studentsCount}
+          subtitle={`Классов: ${classesCount}`}
+          icon={Users}
+          iconColor="text-blue-500"
+          iconBg="bg-blue-50"
+        />
+        <StatCard
+          label="Учителей всего"
+          value={teachersCount}
+          icon={GraduationCap}
+          iconColor="text-purple-500"
+          iconBg="bg-purple-50"
+        />
+        <StatCard
+          label="Средний балл"
+          value={schoolFinalPercent !== null ? `${schoolFinalPercent.toFixed(1)}%` : "—"}
+          subtitle={`Посещаемость: ${schoolAttendanceRate.toFixed(1)}%`}
+          icon={TrendingUp}
+          iconColor="text-emerald-500"
+          iconBg="bg-emerald-50"
+        />
+        <StatCard
+          label="В зоне риска"
+          value={atRiskStudents}
+          icon={AlertTriangle}
+          iconColor="text-red-500"
+          iconBg="bg-red-50"
+        />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-5">
@@ -156,7 +144,7 @@ export default async function AdminDashboard() {
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-lg">
               <Monitor className="h-5 w-5 text-amber-300" />
-              Kiosk Mode
+              Режим стенгазеты
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">

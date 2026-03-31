@@ -2,6 +2,7 @@ import { requireAuth } from "@/lib/auth";
 import { computeKazakhGrade } from "@/lib/bilimclass";
 import { prisma } from "@/lib/prisma";
 import { cn } from "@/lib/utils";
+import { Avatar } from "@/components/shared/Avatar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -115,7 +116,12 @@ export default async function LeaderboardPage() {
                           <span>{position}</span>
                         </span>
                       </TableCell>
-                      <TableCell>{row.name}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <Avatar name={row.name} size="sm" />
+                          <span>{row.name}</span>
+                        </div>
+                      </TableCell>
                       <TableCell className="text-right tabular-nums">
                         {row.finalPercent !== null ? `${row.finalPercent.toFixed(1)}%` : "—"}
                       </TableCell>

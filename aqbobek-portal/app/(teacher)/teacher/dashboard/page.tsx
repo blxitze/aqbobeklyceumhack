@@ -1,10 +1,11 @@
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, BarChart3, CheckCircle, Users } from "lucide-react";
 import { headers } from "next/headers";
 import Link from "next/link";
 
 import ClassPerformanceChart from "@/components/teacher/ClassPerformanceChart";
 import EarlyWarningSystem from "@/components/teacher/EarlyWarningSystem";
 import CollapsibleSection from "@/components/shared/CollapsibleSection";
+import { StatCard } from "@/components/shared/StatCard";
 import type { TeacherClassWithStudents, TeacherStudent } from "@/components/teacher/types";
 import type { StudentFromClassResponse } from "@/components/student/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -178,6 +179,14 @@ export default async function TeacherDashboardPage() {
 
   const allStudents = classes.flatMap((classData) => classData.students);
   const highRiskCount = allStudents.filter((student) => student.riskLevel === "high").length;
+  const averageScore =
+    allStudents.length > 0
+      ? allStudents.reduce((sum, student) => sum + (student.finalPercent ?? 0), 0) / allStudents.length
+      : 0;
+  const attendanceRate =
+    allStudents.length > 0
+      ? allStudents.reduce((sum, student) => sum + student.attendanceRate, 0) / allStudents.length
+      : 0;
 
   return (
     <section className="space-y-6">
@@ -225,33 +234,36 @@ export default async function TeacherDashboardPage() {
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Мои классы</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-semibold">{uniqueClassIds.length}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Учеников всего</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-semibold">{allStudents.length}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">В зоне риска</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className={`text-2xl font-semibold ${highRiskCount > 0 ? "text-red-600" : "text-emerald-600"}`}>
-              {highRiskCount}
-            </p>
-          </CardContent>
-        </Card>
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <StatCard
+          label="Учеников всего"
+          value={allStudents.length}
+          subtitle={`Мои классы: ${uniqueClassIds.length}`}
+          icon={Users}
+          iconColor="text-blue-500"
+          iconBg="bg-blue-50"
+        />
+        <StatCard
+          label="В зоне риска"
+          value={highRiskCount}
+          icon={AlertTriangle}
+          iconColor="text-red-500"
+          iconBg="bg-red-50"
+        />
+        <StatCard
+          label="Средний балл"
+          value={`${averageScore.toFixed(1)}%`}
+          icon={BarChart3}
+          iconColor="text-emerald-500"
+          iconBg="bg-emerald-50"
+        />
+        <StatCard
+          label="Посещаемость"
+          value={`${attendanceRate.toFixed(1)}%`}
+          icon={CheckCircle}
+          iconColor="text-amber-500"
+          iconBg="bg-amber-50"
+        />
       </div>
 
       <Card>
@@ -283,7 +295,7 @@ export default async function TeacherDashboardPage() {
       </Card>
 
       <CollapsibleSection
-        title="Early Warning System"
+        title="Система раннего предупреждения"
         badge={highRiskCount}
         badgeColor="red"
         defaultOpen={false}

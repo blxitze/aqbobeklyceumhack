@@ -22,6 +22,7 @@ export default async function Layout({ children }: LayoutProps) {
       teacherName={session.user.name}
       subjects={teacherProfile?.subjects ?? []}
       firstClassId={firstClassId}
+      userEmail={session.user.email}
     >
       {children}
     </TeacherLayout>
