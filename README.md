@@ -146,48 +146,6 @@ uvicorn main:app --reload --port 8000
 
 ---
 
-## Что не пушить в Git
-
-Убедитесь, что в `.gitignore` (корень и/или подпроекты) учтено:
-
-```gitignore
-.env
-.env.local
-.env.*.local
-node_modules/
-.next/
-venv/
-__pycache__/
-*.pyc
-```
-
-**Не коммитить** файлы с паролями, ключами API и прод-секретами.
-
----
-
-## Передача ключей жюри
-
-Жюри может передать файл `secrets.txt` (**не** кладите его в репозиторий). Пример содержимого:
-
-```env
-DATABASE_URL=
-NEXTAUTH_SECRET=
-OPENAI_API_KEY=
-INTERNAL_SECRET=
-PUSHER_APP_ID=
-PUSHER_SECRET=
-PUSHER_KEY=
-NEXT_PUBLIC_PUSHER_KEY=
-PUSHER_CLUSTER=eu
-NEXT_PUBLIC_PUSHER_CLUSTER=eu
-FASTAPI_URL=http://localhost:8000
-AUTH_SECRET=
-```
-
-Скопируйте значения в `aqbobek-portal/.env.local` и `aqbobek-fastapi/.env`. Передавайте секреты лично или через защищённый канал (не через публичный чат хакатона).
-
----
-
 ## Архитектура
 
 ```text
