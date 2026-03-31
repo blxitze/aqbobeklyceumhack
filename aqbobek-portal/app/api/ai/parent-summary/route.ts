@@ -20,26 +20,91 @@ type WeeklyStats = {
   missedLessons: number;
   worryingSubjects: string[];
   goodSubjects: string[];
+  bestSubject: string | null;
+  worstSubject: string | null;
 };
 
-function buildMockSummary(studentName: string, stats: WeeklyStats): string {
-  const gradeSummary = stats.subjectSummary
-    .map((entry) => `${entry.subject}: ${entry.gradeLabel}`)
-    .join(", ");
+/** Structured facts passed to the LLM — no raw grade rows. */
+type ParentSummaryLlmContext = {
+  childName: string;
+  subjectResults: Array<{
+    subject: string;
+    finalPercent: number | null;
+    predictedGrade: 2 | 3 | 4 | 5 | null;
+    gradeLabel: string;
+    socPercent: number | null;
+    trend: "improving" | "declining" | "stable";
+  }>;
+  missedLessons: number;
+  bestSubject: string | null;
+  worstSubject: string | null;
+  worryingSubjects: string[];
+  goodSubjects: string[];
+};
 
-  const warningPart =
-    stats.worryingSubjects.length > 0
-      ? `Рекомендуем обратить внимание на: ${stats.worryingSubjects.join(", ")}.`
-      : "Успеваемость в норме по всем предметам.";
-
-  return `За период обучения ${studentName} имеет следующие прогнозируемые оценки: ${gradeSummary || "недостаточно данных"}. ${warningPart}`;
+function bestAndWorstSubject(
+  subjectResults: Array<{ subject: string; finalPercent: number | null }>,
+): { bestSubject: string | null; worstSubject: string | null } {
+  const scored = subjectResults.filter(
+    (s): s is { subject: string; finalPercent: number } => s.finalPercent !== null,
+  );
+  if (scored.length === 0) {
+    return { bestSubject: null, worstSubject: null };
+  }
+  let best = scored[0]!;
+  let worst = scored[0]!;
+  for (const row of scored) {
+    if (row.finalPercent > best.finalPercent) best = row;
+    if (row.finalPercent < worst.finalPercent) worst = row;
+  }
+  return { bestSubject: best.subject, worstSubject: worst.subject };
 }
 
-async function generateWithOpenAi(studentName: string, stats: WeeklyStats): Promise<string> {
+function buildLlmContext(childName: string, stats: WeeklyStats): ParentSummaryLlmContext {
+  return {
+    childName,
+    subjectResults: stats.subjectSummary.map((s) => ({
+      subject: s.subject,
+      finalPercent: s.finalPercent,
+      predictedGrade: s.predictedGrade,
+      gradeLabel: s.gradeLabel,
+      socPercent: s.socPercent,
+      trend: s.trend,
+    })),
+    missedLessons: stats.missedLessons,
+    bestSubject: stats.bestSubject,
+    worstSubject: stats.worstSubject,
+    worryingSubjects: stats.worryingSubjects,
+    goodSubjects: stats.goodSubjects,
+  };
+}
+
+function buildMockSummary(context: ParentSummaryLlmContext): string {
+  const { childName, subjectResults, missedLessons, bestSubject, worstSubject, worryingSubjects } =
+    context;
+
+  const subjectsLine =
+    subjectResults.length > 0
+      ? subjectResults
+          .map((s) => `${s.subject}: итог ${s.finalPercent ?? "—"}%, оценка ${s.gradeLabel}`)
+          .join("; ")
+      : "по предметам пока недостаточно данных для итога.";
+
+  const focus =
+    worryingSubjects.length > 0
+      ? `Стоит поддержать ребёнка по: ${worryingSubjects.join(", ")}.`
+      : "Сильные стороны и зоны внимания отражены в цифрах выше.";
+
+  return `Краткая сводка по ${childName}. ${subjectsLine} Лучший предмет по итоговому проценту: ${bestSubject ?? "нет данных"}. Самый сложный предмет: ${worstSubject ?? "нет данных"}. Пропуски без уважительной причины (по данным журнала): ${missedLessons}. ${focus}`;
+}
+
+async function generateWithOpenAi(context: ParentSummaryLlmContext): Promise<string> {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
-    return buildMockSummary(studentName, stats);
+    return buildMockSummary(context);
   }
+
+  const dataJson = JSON.stringify(context, null, 2);
 
   const response = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
@@ -53,16 +118,23 @@ async function generateWithOpenAi(studentName: string, stats: WeeklyStats): Prom
         {
           role: "system",
           content:
-            "Ты помощник для родителей учеников казахстанской школы. Пиши тепло, по-русски, кратко — как будто пишешь родителю письмо.",
+            "Ты помощник для родителей учеников казахстанской школы. Пиши тепло, по-русски, кратко (3–5 предложений), как письмо родителю. " +
+            "Никогда не используй плейсхолдеры вроде [имя], [Ваше имя], [ребёнок] — всегда пиши настоящее имя ребёнка из поля childName в JSON. " +
+            "Не выдумывай оценки и проценты: опирайся только на JSON ниже.",
         },
         {
           role: "user",
-          content: `Напиши недельную сводку об успеваемости ребёнка ${studentName} на основе данных (не изменяй числовые значения): ${JSON.stringify(
-            stats,
-          )}. Формат: 2-3 предложения — что хорошо, что требует внимания, один конкретный совет родителю.`,
+          content:
+            "Используй только эти данные, не придумывай цифры и не добавляй факты, которых нет в JSON.\n\n" +
+            dataJson +
+            "\n\n" +
+            "Задача: недельная сводка для родителя о ребёнке " +
+            context.childName +
+            ". Укажи, что хорошо (опираясь на bestSubject и goodSubjects), что требует внимания (worstSubject, worryingSubjects), упомяни missedLessons если > 0. " +
+            "Один конкретный совет родителю. Обращайся к родителю на «вы».",
         },
       ],
-      temperature: 0.5,
+      temperature: 0.4,
     }),
   });
 
@@ -73,7 +145,7 @@ async function generateWithOpenAi(studentName: string, stats: WeeklyStats): Prom
   const payload = (await response.json()) as {
     choices?: Array<{ message?: { content?: string } }>;
   };
-  return payload.choices?.[0]?.message?.content?.trim() || buildMockSummary(studentName, stats);
+  return payload.choices?.[0]?.message?.content?.trim() || buildMockSummary(context);
 }
 
 export async function POST(request: Request) {
@@ -102,6 +174,8 @@ export async function POST(request: Request) {
     if (parentProfile.childId !== studentId) {
       return NextResponse.json({ error: "Доступ запрещён" }, { status: 403 });
     }
+
+    const childName = parentProfile.child.user.name;
 
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
@@ -147,18 +221,26 @@ export async function POST(request: Request) {
       .filter((subjectResult) => subjectResult.finalPercent !== null && subjectResult.finalPercent >= 65)
       .map((subjectResult) => subjectResult.subject);
 
+    const { bestSubject, worstSubject } = bestAndWorstSubject(subjectResults);
+
+    const missedLessons = gradesLastWeek.filter((grade) => !grade.attendance).length;
+
     const stats: WeeklyStats = {
       subjectSummary: subjectResults,
-      missedLessons: gradesLastWeek.filter((grade) => !grade.attendance).length,
+      missedLessons,
       worryingSubjects,
       goodSubjects,
+      bestSubject,
+      worstSubject,
     };
+
+    const llmContext = buildLlmContext(childName, stats);
 
     let summary = "";
     try {
-      summary = await generateWithOpenAi(parentProfile.child.user.name, stats);
+      summary = await generateWithOpenAi(llmContext);
     } catch {
-      summary = buildMockSummary(parentProfile.child.user.name, stats);
+      summary = buildMockSummary(llmContext);
     }
 
     return NextResponse.json({

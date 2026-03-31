@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -18,6 +18,8 @@ type WeeklySummaryStats = {
   missedLessons: number;
   worryingSubjects: string[];
   goodSubjects: string[];
+  bestSubject?: string | null;
+  worstSubject?: string | null;
 };
 
 type WeeklySummaryResponse = {
@@ -26,10 +28,17 @@ type WeeklySummaryResponse = {
   generatedAt: string;
 };
 
+type CachedSummaryPayload = WeeklySummaryResponse & {
+  childId: string;
+};
+
 type WeeklySummaryPanelProps = {
   childId: string;
   childName: string;
 };
+
+const CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+const REFRESH_COOLDOWN_MS = 60 * 60 * 1000;
 
 function normalizeSummaryResponse(input: WeeklySummaryResponse): WeeklySummaryResponse {
   return {
@@ -40,6 +49,8 @@ function normalizeSummaryResponse(input: WeeklySummaryResponse): WeeklySummaryRe
       worryingSubjects: input.stats.worryingSubjects ?? [],
       goodSubjects: input.stats.goodSubjects ?? [],
       missedLessons: input.stats.missedLessons ?? 0,
+      bestSubject: input.stats.bestSubject ?? null,
+      worstSubject: input.stats.worstSubject ?? null,
     },
   };
 }
@@ -54,14 +65,47 @@ function formatDateTime(iso: string): string {
   }).format(new Date(iso));
 }
 
+function readValidCache(storageKey: string, childId: string): CachedSummaryPayload | null {
+  if (typeof window === "undefined") return null;
+  const raw = sessionStorage.getItem(storageKey);
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as Partial<CachedSummaryPayload>;
+    if (parsed.childId !== childId || !parsed.generatedAt || !parsed.summary || !parsed.stats) {
+      return null;
+    }
+    const age = Date.now() - new Date(parsed.generatedAt).getTime();
+    if (Number.isNaN(age) || age < 0 || age > CACHE_MAX_AGE_MS) {
+      return null;
+    }
+    return {
+      ...normalizeSummaryResponse(parsed as WeeklySummaryResponse),
+      childId: parsed.childId,
+    } as CachedSummaryPayload;
+  } catch {
+    return null;
+  }
+}
+
+function saveCache(storageKey: string, childId: string, payload: WeeklySummaryResponse): void {
+  if (typeof window === "undefined") return;
+  const cached: CachedSummaryPayload = {
+    ...normalizeSummaryResponse(payload),
+    childId,
+  };
+  sessionStorage.setItem(storageKey, JSON.stringify(cached));
+}
+
 export default function WeeklySummaryPanel({ childId, childName }: WeeklySummaryPanelProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<WeeklySummaryResponse | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  /** Avoid duplicate auto-fetch (Strict Mode / re-renders) for the same child. */
+  const lastAutoInitChildRef = useRef<string | null>(null);
   const storageKey = `parent-summary-${childId}`;
 
-  async function loadSummary() {
-    if (data) return;
+  const fetchSummary = useCallback(async () => {
     setLoading(true);
     setError(null);
 
@@ -77,28 +121,61 @@ export default function WeeklySummaryPanel({ childId, childName }: WeeklySummary
         throw new Error(payload.error ?? "Не удалось получить сводку");
       }
 
-      setData(normalizeSummaryResponse(payload));
-      if (typeof window !== "undefined") {
-        sessionStorage.setItem(storageKey, JSON.stringify(normalizeSummaryResponse(payload)));
-      }
+      const normalized = normalizeSummaryResponse(payload);
+      setData(normalized);
+      saveCache(storageKey, childId, normalized);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Не удалось получить сводку");
     } finally {
       setLoading(false);
     }
-  }
+  }, [childId, storageKey]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const cached = sessionStorage.getItem(storageKey);
-    if (!cached) return;
+    if (lastAutoInitChildRef.current === childId) return;
 
-    try {
-      setData(normalizeSummaryResponse(JSON.parse(cached) as WeeklySummaryResponse));
-    } catch {
-      sessionStorage.removeItem(storageKey);
+    const cached = readValidCache(storageKey, childId);
+    if (cached) {
+      setData({
+        summary: cached.summary,
+        stats: cached.stats,
+        generatedAt: cached.generatedAt,
+      });
+      lastAutoInitChildRef.current = childId;
+      return;
     }
-  }, [storageKey]);
+
+    lastAutoInitChildRef.current = childId;
+    void fetchSummary();
+  }, [childId, storageKey, fetchSummary]);
+
+  useEffect(() => {
+    if (!toastMessage) return;
+    const t = window.setTimeout(() => setToastMessage(null), 4500);
+    return () => window.clearTimeout(t);
+  }, [toastMessage]);
+
+  function handleRefresh() {
+    if (typeof window === "undefined") return;
+    const raw = sessionStorage.getItem(storageKey);
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw) as { childId?: string; generatedAt?: string };
+        if (parsed.childId === childId && parsed.generatedAt) {
+          const elapsed = Date.now() - new Date(parsed.generatedAt).getTime();
+          if (!Number.isNaN(elapsed) && elapsed >= 0 && elapsed < REFRESH_COOLDOWN_MS) {
+            setToastMessage("Сводка обновлялась менее часа назад");
+            return;
+          }
+        }
+      } catch {
+        /* allow refresh */
+      }
+    }
+
+    void fetchSummary();
+  }
 
   const bestSubject =
     data?.stats.goodSubjects?.[0] ??
@@ -110,10 +187,21 @@ export default function WeeklySummaryPanel({ childId, childName }: WeeklySummary
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-2">
         <p className="text-sm text-muted-foreground">Недельная сводка для {childName}</p>
-        <Button size="sm" onClick={() => void loadSummary()} disabled={loading}>
-          Обновить сводку
-        </Button>
+        {data ? (
+          <Button size="sm" onClick={() => handleRefresh()} disabled={loading}>
+            Обновить
+          </Button>
+        ) : null}
       </div>
+
+      {toastMessage ? (
+        <p
+          role="status"
+          className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900"
+        >
+          {toastMessage}
+        </p>
+      ) : null}
 
       {loading ? (
         <div className="space-y-3">
@@ -130,7 +218,7 @@ export default function WeeklySummaryPanel({ childId, childName }: WeeklySummary
       ) : null}
 
       {!loading && !error && !data ? (
-        <p className="text-sm text-muted-foreground">Нажмите кнопку для получения сводки</p>
+        <p className="text-sm text-muted-foreground">Загрузка сводки…</p>
       ) : null}
 
       {!loading && data ? (

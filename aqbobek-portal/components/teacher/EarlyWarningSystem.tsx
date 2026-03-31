@@ -272,7 +272,7 @@ export default function EarlyWarningSystem({ students }: EarlyWarningSystemProps
                 </TableCell>
                 <TableCell>{student.weakestSubject || "—"}</TableCell>
                 <TableCell>
-                  <Button variant="outline" size="sm" onClick={() => router.push(`/teacher/class/${student.classId}`)}>
+                  <Button variant="outline" size="sm" onClick={() => router.push(`/teacher/student/${student.id}`)}>
                     Подробнее
                   </Button>
                 </TableCell>

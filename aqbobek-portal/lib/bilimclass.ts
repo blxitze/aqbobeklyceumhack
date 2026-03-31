@@ -3,7 +3,20 @@ import type { Grade } from "@prisma/client";
 export type GradeTrend = "improving" | "declining" | "stable";
 export type KazakhGradeLabel = "Отлично" | "Хорошо" | "Удовл." | "Неудовл." | "—";
 
+/** Unified band for dashboard + tutor (0–100 subject risk score). */
+export type RiskLevel = "low" | "medium" | "high";
+
 type GradeWithMax = Pick<Grade, "score" | "maxScore" | "type">;
+
+/**
+ * Maps aggregate risk percent (0–100) to low / medium / high.
+ * Same thresholds on dashboard and tutor flows.
+ */
+export function getRiskLevel(riskPercent: number): RiskLevel {
+  if (riskPercent < 35) return "low";
+  if (riskPercent < 65) return "medium";
+  return "high";
+}
 
 export function computeTrend(grades: Grade[]): GradeTrend {
   if (grades.length < 6) {

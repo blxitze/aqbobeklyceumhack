@@ -1,58 +1,67 @@
-import { NextResponse } from "next/server";
-import { Role } from "@prisma/client";
+import { NextResponse } from 'next/server'
 
-import { auth } from "@/auth";
+import { auth } from '@/auth'
+import { fastapi } from '@/lib/fastapi'
+import { prisma } from '@/lib/prisma'
+import { dateToIsoWeekday, todayLocalISO } from '@/lib/date-utils'
 
-type GeneratePayload = {
-  date?: string;
-};
-
-export async function POST(request: Request) {
-  try {
-    const session = await auth();
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-    if (session.user.role !== Role.ADMIN) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-
-    const body = (await request.json().catch(() => ({}))) as GeneratePayload;
-    const fastapiUrl = process.env.FASTAPI_URL;
-    const internalSecret = process.env.INTERNAL_SECRET;
-
-    if (!fastapiUrl || !internalSecret) {
-      return NextResponse.json({
-        schedule: [],
-        message: "FastAPI недоступен — используйте ручной режим",
-      });
-    }
-
-    try {
-      const response = await fetch(`${fastapiUrl.replace(/\/$/, "")}/schedule/generate`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Internal-Token": internalSecret,
-        },
-        body: JSON.stringify({ date: body.date }),
-        signal: AbortSignal.timeout(8000),
-      });
-
-      if (!response.ok) {
-        throw new Error("FastAPI request failed");
-      }
-
-      const payload = (await response.json()) as Record<string, unknown>;
-      return NextResponse.json(payload);
-    } catch {
-      return NextResponse.json({
-        schedule: [],
-        message: "FastAPI недоступен — используйте ручной режим",
-      });
-    }
-  } catch (error) {
-    console.error("POST /api/schedule/generate failed:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+export async function POST(req: Request) {
+  const session = await auth()
+  if (!session || session.user.role !== 'ADMIN') {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
+
+  const body = await req.json().catch(() => ({}))
+  const date = (body.date as string) || todayLocalISO()
+
+  const allClasses = await prisma.class.findMany()
+  const allClassIds = allClasses.map((c: { id: string }) => c.id)
+  const selectedClassId: string = body.classId || allClassIds[0] || ''
+
+  if (!selectedClassId) {
+    return NextResponse.json({
+      schedule: [],
+      message: 'Классы не найдены',
+      fastapiUsed: false,
+      conflicts: [],
+    })
+  }
+
+  let fastapiOk = false
+  try {
+    await fastapi.post('/schedule/generate', { classIds: allClassIds, date })
+    fastapiOk = true
+  } catch {
+    // FastAPI down — will read existing from DB
+  }
+
+  const dayOfWeek = dateToIsoWeekday(date)
+
+  const slots = await prisma.scheduleSlot.findMany({
+    where: {
+      classId: selectedClassId,
+      dayOfWeek,
+      isActive: true,
+    },
+    include: { class: true },
+  })
+
+  return NextResponse.json({
+    schedule: slots.map((s: typeof slots[number]) => ({
+      id: s.id,
+      classId: s.classId,
+      className: s.class?.name ?? '',
+      subject: s.subject,
+      teacherId: s.teacherId ?? '',
+      room: s.room,
+      dayOfWeek: s.dayOfWeek,
+      timeSlot: s.timeSlot,
+    })),
+    message:
+      slots.length > 0
+        ? `Загружено ${slots.length} уроков`
+        : 'Нет расписания на этот день — нажмите Генерировать',
+    fastapiUsed: fastapiOk,
+    conflicts: [],
+  })
 }

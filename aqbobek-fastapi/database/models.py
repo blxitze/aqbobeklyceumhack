@@ -1,6 +1,8 @@
 from sqlalchemy import ARRAY, Boolean, DateTime, Float, ForeignKey, Integer, String
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-
+from datetime import datetime
+from typing import Optional
+from sqlalchemy.sql import func
 
 class Base(DeclarativeBase):
     pass
@@ -79,13 +81,13 @@ class ScheduleSlot(Base):
 
     id: Mapped[str] = mapped_column(String, primary_key=True)
     class_id: Mapped[str] = mapped_column("classId", ForeignKey("Class.id"), nullable=False)
-    teacher_id: Mapped[str] = mapped_column("teacherId", ForeignKey("TeacherProfile.id"), nullable=False)
+    teacher_id: Mapped[Optional[str]] = mapped_column("teacherId", ForeignKey("TeacherProfile.id"), nullable=True)
     subject: Mapped[str] = mapped_column(String, nullable=False)
     room: Mapped[str] = mapped_column(String, nullable=False)
     day_of_week: Mapped[int] = mapped_column("dayOfWeek", Integer, nullable=False)
     time_slot: Mapped[int] = mapped_column("timeSlot", Integer, nullable=False)
-    is_active: Mapped[bool] = mapped_column("isActive", Boolean, nullable=False)
-    created_at: Mapped[DateTime] = mapped_column("createdAt", DateTime, nullable=False)
+    is_active: Mapped[bool] = mapped_column("isActive", Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column("createdAt", DateTime, nullable=False, server_default=func.now())
 
 
 class Substitution(Base):

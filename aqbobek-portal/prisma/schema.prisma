@@ -57,8 +57,8 @@ model TeacherProfile {
   subjects                String[]
   user                    User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   scheduleSlots           ScheduleSlot[]
-  originalSubstitutions   Substitution[] @relation("OriginalTeacherSubstitutions")
-  substituteSubstitutions Substitution[] @relation("SubstituteTeacherSubstitutions")
+  originalSubstitutions   Substitution[] @relation("OriginalTeacher")
+  substituteSubstitutions Substitution[] @relation("SubstituteTeacher")
 }
 
 model ParentProfile {
@@ -123,8 +123,8 @@ model Substitution {
   date              DateTime
   reason            String
   slots             ScheduleSlot[]
-  originalTeacher   TeacherProfile @relation("OriginalTeacherSubstitutions", fields: [originalTeacherId], references: [id], onDelete: Restrict)
-  substituteTeacher TeacherProfile? @relation("SubstituteTeacherSubstitutions", fields: [substituteTeacherId], references: [id], onDelete: SetNull)
+  originalTeacher   TeacherProfile @relation("OriginalTeacher", fields: [originalTeacherId], references: [id], onDelete: Restrict)
+  substituteTeacher TeacherProfile? @relation("SubstituteTeacher", fields: [substituteTeacherId], references: [id], onDelete: SetNull)
   createdAt         DateTime       @default(now())
 }
 

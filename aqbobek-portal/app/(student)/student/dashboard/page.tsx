@@ -208,7 +208,7 @@ async function DashboardContent() {
           </CardHeader>
           <CardContent>
             {analytics.data ? (
-              <RiskPanel analytics={analytics.data} />
+              <RiskPanel analytics={analytics.data} currentStudentId={studentProfile.id} />
             ) : (
               <p className="text-sm text-muted-foreground">Нет данных аналитики</p>
             )}

@@ -1,81 +1,46 @@
-import { NextResponse } from "next/server";
-import { Role } from "@prisma/client";
+import { NextResponse } from 'next/server'
 
-import { auth } from "@/auth";
-import { prisma } from "@/lib/prisma";
+import { auth } from '@/auth'
+import { fastapi } from '@/lib/fastapi'
+import { prisma } from '@/lib/prisma'
 
-type SubstitutePayload = {
-  teacherId?: string;
-  date?: string;
-  reason?: string;
-};
+export async function POST(req: Request) {
+  const session = await auth()
+  if (!session || session.user.role !== 'ADMIN') {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
 
-export async function POST(request: Request) {
+  const { originalTeacherId, date, reason } = await req.json()
+
+  if (!originalTeacherId || !date) {
+    return NextResponse.json(
+      { error: 'originalTeacherId and date are required' },
+      { status: 400 },
+    )
+  }
+
   try {
-    const session = await auth();
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-    if (session.user.role !== Role.ADMIN) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-
-    const body = (await request.json()) as SubstitutePayload;
-    const teacherId = body.teacherId?.trim();
-    const reason = body.reason?.trim();
-    const date = body.date ? new Date(body.date) : new Date();
-
-    if (!teacherId || !reason) {
-      return NextResponse.json({ error: "teacherId и reason обязательны" }, { status: 400 });
-    }
+    const res = await fastapi.post('/schedule/substitute', {
+      originalTeacherId,
+      date,
+      reason: reason || 'Не указана',
+    })
 
     await prisma.substitution.create({
       data: {
-        originalTeacherId: teacherId,
-        date,
-        reason,
+        originalTeacherId,
+        substituteTeacherId: res.data.substituteTeacherId ?? null,
+        date: new Date(date),
+        reason: reason || 'Не указана',
       },
-    });
+    })
 
-    const fastapiUrl = process.env.FASTAPI_URL;
-    const internalSecret = process.env.INTERNAL_SECRET;
-
-    if (!fastapiUrl || !internalSecret) {
-      return NextResponse.json({
-        schedule: [],
-        message: "FastAPI недоступен — используйте ручной режим",
-      });
-    }
-
-    try {
-      const response = await fetch(`${fastapiUrl.replace(/\/$/, "")}/schedule/substitute`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Internal-Token": internalSecret,
-        },
-        body: JSON.stringify({
-          teacher_id: teacherId,
-          date: date.toISOString().slice(0, 10),
-          reason,
-        }),
-        signal: AbortSignal.timeout(8000),
-      });
-
-      if (!response.ok) {
-        throw new Error("FastAPI request failed");
-      }
-
-      const payload = (await response.json()) as Record<string, unknown>;
-      return NextResponse.json(payload);
-    } catch {
-      return NextResponse.json({
-        schedule: [],
-        message: "FastAPI недоступен — используйте ручной режим",
-      });
-    }
-  } catch (error) {
-    console.error("POST /api/schedule/substitute failed:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json(res.data)
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'FastAPI недоступен'
+    return NextResponse.json(
+      { error: msg, diff: [], updatedSlots: [], message: msg },
+      { status: 503 },
+    )
   }
 }

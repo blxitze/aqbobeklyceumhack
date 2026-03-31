@@ -7,6 +7,7 @@ import {
   computeAttendanceRate,
   computeRiskScore,
   computeTrend,
+  getRiskLevel,
 } from "@/lib/bilimclass";
 import { prisma } from "@/lib/prisma";
 
@@ -93,15 +94,9 @@ export async function GET(request: NextRequest) {
       .map((subjectRisk) => subjectRisk.subject);
     const attendanceRate = computeAttendanceRate(grades);
 
-    const riskLevel: "low" | "medium" | "high" =
-      (overallKazakh.finalPercent !== null && overallKazakh.finalPercent < 40) ||
-      (overallKazakh.socPercent !== null && overallKazakh.socPercent < 40)
-        ? "high"
-        : overallKazakh.finalPercent !== null && overallKazakh.finalPercent < 65
-          ? "medium"
-          : overallKazakh.finalPercent === null
-            ? "medium"
-            : "low";
+    const maxSubjectRisk =
+      subjectRisks.length > 0 ? Math.max(...subjectRisks.map((s) => s.riskScore)) : 0;
+    const riskLevel = getRiskLevel(Math.round(maxSubjectRisk));
 
     return NextResponse.json(
       {

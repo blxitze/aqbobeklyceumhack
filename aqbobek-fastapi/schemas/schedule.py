@@ -1,3 +1,5 @@
+from typing import Optional
+
 from pydantic import BaseModel
 
 
@@ -7,10 +9,11 @@ class GenerateRequest(BaseModel):
 
 
 class ScheduleSlotOut(BaseModel):
-    id: str
+    id: str = ""
     classId: str
-    teacherId: str
+    className: str = ""
     subject: str
+    teacherId: str = ""
     room: str
     dayOfWeek: int
     timeSlot: int
@@ -19,15 +22,17 @@ class ScheduleSlotOut(BaseModel):
 class GenerateResponse(BaseModel):
     schedule: list[ScheduleSlotOut]
     message: str
+    conflicts: list[str] = []
 
 
 class SubstituteRequest(BaseModel):
     originalTeacherId: str
     date: str
-    reason: str
+    reason: str = "Не указана"
 
 
 class SubstituteResponse(BaseModel):
-    updatedSlots: list[ScheduleSlotOut]
+    updatedSlots: list[dict]
     diff: list[str]
     message: str
+    substituteTeacherId: Optional[str] = None

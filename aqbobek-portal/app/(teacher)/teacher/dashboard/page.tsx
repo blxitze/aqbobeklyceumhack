@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireAuth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { trendFromSubjectAverages } from "@/lib/teacher-analytics";
+import { dateToIsoWeekday, todayLocalISO } from "@/lib/date-utils";
 
 type ApiResult<T> = {
   data: T | null;
@@ -82,11 +83,20 @@ function toTeacherStudent(student: StudentFromClassResponse): TeacherStudent {
   };
 }
 
+const DAY_LABELS: Record<number, string> = {
+  1: "Пн",
+  2: "Вт",
+  3: "Ср",
+  4: "Чт",
+  5: "Пт",
+  6: "Сб",
+  7: "Вс",
+};
+
 export default async function TeacherDashboardPage() {
   const session = await requireAuth("TEACHER");
   const teacherProfile = await prisma.teacherProfile.findFirst({
     where: { userId: session.user.id },
-    include: { scheduleSlots: { include: { class: true } } },
   });
 
   if (!teacherProfile) {
@@ -102,9 +112,30 @@ export default async function TeacherDashboardPage() {
     );
   }
 
-  const uniqueClassIds = [...new Set(teacherProfile.scheduleSlots.map((slot) => slot.classId))];
+  const todayDow = dateToIsoWeekday(todayLocalISO());
+
+  const todaySlots = await prisma.scheduleSlot.findMany({
+    where: {
+      teacherId: teacherProfile.id,
+      dayOfWeek: todayDow,
+      isActive: true,
+    },
+    include: { class: true },
+    orderBy: [{ timeSlot: "asc" }],
+  });
+
+  const allTeacherSlots = await prisma.scheduleSlot.findMany({
+    where: {
+      teacherId: teacherProfile.id,
+      isActive: true,
+    },
+    include: { class: true },
+    orderBy: [{ dayOfWeek: "asc" }, { timeSlot: "asc" }],
+  });
+
+  const uniqueClassIds = [...new Set(allTeacherSlots.map((slot) => slot.classId))];
   const classNameById = new Map<string, string>();
-  for (const slot of teacherProfile.scheduleSlots) {
+  for (const slot of allTeacherSlots) {
     classNameById.set(slot.classId, slot.class.name);
   }
 
@@ -159,6 +190,27 @@ export default async function TeacherDashboardPage() {
           </CardContent>
         </Card>
       ) : null}
+
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-lg">
+            Моё расписание на сегодня ({DAY_LABELS[todayDow] ?? `День ${todayDow}`})
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {todaySlots.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Сегодня нет уроков.</p>
+          ) : (
+            <ul className="space-y-1 text-sm">
+              {todaySlots.map((row) => (
+                <li key={row.id} className="text-muted-foreground">
+                  Урок {row.timeSlot} — {row.subject} — {row.class.name} — каб.{row.room}
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
 
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
